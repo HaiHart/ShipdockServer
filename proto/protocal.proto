@@ -1,0 +1,25 @@
+syntax = "proto3";
+package proto;
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/HaiHart/shipdock/proto";
+
+service Com{
+    rpc Fetch(stream Pack) returns (stream Pack);
+    rpc FetchShip(string) returns (int32);
+}
+
+message Header{
+    google.protobuf.Timestamp time =1;
+}
+
+message Container{
+    int32 id =1;
+    string owner = 2;
+    int32 place =3;
+    string name = 4;
+    Header head =5;
+}
+
+message Pack{
+    repeated Container list=1;
+}
