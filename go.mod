@@ -1,4 +1,4 @@
-module github.com/server
+module github.com/HaiHart/ShipdockServer
 
 go 1.19
 

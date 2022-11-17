@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ComClient interface {
 	Fetch(ctx context.Context, opts ...grpc.CallOption) (Com_FetchClient, error)
+	FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.CallOption) (*ShipResponse, error)
 }
 
 type comClient struct {
@@ -64,11 +65,21 @@ func (x *comFetchClient) Recv() (*Pack, error) {
 	return m, nil
 }
 
+func (c *comClient) FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.CallOption) (*ShipResponse, error) {
+	out := new(ShipResponse)
+	err := c.cc.Invoke(ctx, "/proto.Com/FetchShip", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ComServer is the server API for Com service.
 // All implementations must embed UnimplementedComServer
 // for forward compatibility
 type ComServer interface {
 	Fetch(Com_FetchServer) error
+	FetchShip(context.Context, *ShipAccess) (*ShipResponse, error)
 	mustEmbedUnimplementedComServer()
 }
 
@@ -78,6 +89,9 @@ type UnimplementedComServer struct {
 
 func (UnimplementedComServer) Fetch(Com_FetchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Fetch not implemented")
+}
+func (UnimplementedComServer) FetchShip(context.Context, *ShipAccess) (*ShipResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchShip not implemented")
 }
 func (UnimplementedComServer) mustEmbedUnimplementedComServer() {}
 
@@ -118,13 +132,36 @@ func (x *comFetchServer) Recv() (*Pack, error) {
 	return m, nil
 }
 
+func _Com_FetchShip_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShipAccess)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ComServer).FetchShip(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Com/FetchShip",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ComServer).FetchShip(ctx, req.(*ShipAccess))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Com_ServiceDesc is the grpc.ServiceDesc for Com service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Com_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "proto.Com",
 	HandlerType: (*ComServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "FetchShip",
+			Handler:    _Com_FetchShip_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Fetch",

@@ -5,7 +5,7 @@ option go_package = "github.com/HaiHart/shipdock/proto";
 
 service Com{
     rpc Fetch(stream Pack) returns (stream Pack);
-    rpc FetchShip(string) returns (int32);
+    rpc FetchShip(ShipAccess) returns (ShipResponse);
 }
 
 message Header{
@@ -22,4 +22,18 @@ message Container{
 
 message Pack{
     repeated Container list=1;
+    string err =2;
+}
+
+message ShipAccess{
+    string ship_name =1;
+    string man_id =2;
+    int32 floor =3;
+    Header head =5;
+}
+
+message ShipResponse{
+    int32 size =1;
+    string err =2;
+    Header head =3;
 }
