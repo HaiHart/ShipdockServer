@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ComClient interface {
-	Fetch(ctx context.Context, opts ...grpc.CallOption) (Com_FetchClient, error)
+	MoveContainer(ctx context.Context, opts ...grpc.CallOption) (Com_MoveContainerClient, error)
 	FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.CallOption) (*ShipResponse, error)
 }
 
@@ -34,30 +34,30 @@ func NewComClient(cc grpc.ClientConnInterface) ComClient {
 	return &comClient{cc}
 }
 
-func (c *comClient) Fetch(ctx context.Context, opts ...grpc.CallOption) (Com_FetchClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Com_ServiceDesc.Streams[0], "/proto.Com/Fetch", opts...)
+func (c *comClient) MoveContainer(ctx context.Context, opts ...grpc.CallOption) (Com_MoveContainerClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Com_ServiceDesc.Streams[0], "/proto.Com/MoveContainer", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &comFetchClient{stream}
+	x := &comMoveContainerClient{stream}
 	return x, nil
 }
 
-type Com_FetchClient interface {
+type Com_MoveContainerClient interface {
 	Send(*Pack) error
 	Recv() (*Pack, error)
 	grpc.ClientStream
 }
 
-type comFetchClient struct {
+type comMoveContainerClient struct {
 	grpc.ClientStream
 }
 
-func (x *comFetchClient) Send(m *Pack) error {
+func (x *comMoveContainerClient) Send(m *Pack) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *comFetchClient) Recv() (*Pack, error) {
+func (x *comMoveContainerClient) Recv() (*Pack, error) {
 	m := new(Pack)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (c *comClient) FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.
 // All implementations must embed UnimplementedComServer
 // for forward compatibility
 type ComServer interface {
-	Fetch(Com_FetchServer) error
+	MoveContainer(Com_MoveContainerServer) error
 	FetchShip(context.Context, *ShipAccess) (*ShipResponse, error)
 	mustEmbedUnimplementedComServer()
 }
@@ -87,8 +87,8 @@ type ComServer interface {
 type UnimplementedComServer struct {
 }
 
-func (UnimplementedComServer) Fetch(Com_FetchServer) error {
-	return status.Errorf(codes.Unimplemented, "method Fetch not implemented")
+func (UnimplementedComServer) MoveContainer(Com_MoveContainerServer) error {
+	return status.Errorf(codes.Unimplemented, "method MoveContainer not implemented")
 }
 func (UnimplementedComServer) FetchShip(context.Context, *ShipAccess) (*ShipResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FetchShip not implemented")
@@ -106,25 +106,25 @@ func RegisterComServer(s grpc.ServiceRegistrar, srv ComServer) {
 	s.RegisterService(&Com_ServiceDesc, srv)
 }
 
-func _Com_Fetch_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ComServer).Fetch(&comFetchServer{stream})
+func _Com_MoveContainer_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ComServer).MoveContainer(&comMoveContainerServer{stream})
 }
 
-type Com_FetchServer interface {
+type Com_MoveContainerServer interface {
 	Send(*Pack) error
 	Recv() (*Pack, error)
 	grpc.ServerStream
 }
 
-type comFetchServer struct {
+type comMoveContainerServer struct {
 	grpc.ServerStream
 }
 
-func (x *comFetchServer) Send(m *Pack) error {
+func (x *comMoveContainerServer) Send(m *Pack) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *comFetchServer) Recv() (*Pack, error) {
+func (x *comMoveContainerServer) Recv() (*Pack, error) {
 	m := new(Pack)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -164,8 +164,8 @@ var Com_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Fetch",
-			Handler:       _Com_Fetch_Handler,
+			StreamName:    "MoveContainer",
+			Handler:       _Com_MoveContainer_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

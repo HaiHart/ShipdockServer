@@ -4,7 +4,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/HaiHart/shipdock/proto";
 
 service Com{
-    rpc Fetch(stream Pack) returns (stream Pack);
+    rpc MoveContainer(stream Pack) returns (stream Pack);
     rpc FetchShip(ShipAccess) returns (ShipResponse);
 }
 
@@ -13,15 +13,14 @@ message Header{
 }
 
 message Container{
-    int32 id =1;
-    string owner = 2;
+    string id =1;
+    google.protobuf.Timestamp time =2;
     int32 place =3;
     string name = 4;
-    Header head =5;
 }
 
 message Pack{
-    repeated Container list=1;
+    Container list=1;
     string err =2;
 }
 
@@ -36,4 +35,5 @@ message ShipResponse{
     int32 size =1;
     string err =2;
     Header head =3;
+    repeated Container container_list =4;
 }
