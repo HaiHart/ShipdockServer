@@ -17,11 +17,13 @@ message Container{
     google.protobuf.Timestamp time =2;
     int32 place =3;
     string name = 4;
+    int32 new_place=5;
 }
 
 message Pack{
-    Container list=1;
+    repeated Container list=1;
     string err =2;
+    bool swap = 3;
 }
 
 message ShipAccess{
