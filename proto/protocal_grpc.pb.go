@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type ComClient interface {
 	MoveContainer(ctx context.Context, opts ...grpc.CallOption) (Com_MoveContainerClient, error)
 	FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.CallOption) (*ShipResponse, error)
+	FetchList(ctx context.Context, in *Header, opts ...grpc.CallOption) (*ShipList, error)
 }
 
 type comClient struct {
@@ -74,12 +75,22 @@ func (c *comClient) FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.
 	return out, nil
 }
 
+func (c *comClient) FetchList(ctx context.Context, in *Header, opts ...grpc.CallOption) (*ShipList, error) {
+	out := new(ShipList)
+	err := c.cc.Invoke(ctx, "/proto.Com/FetchList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ComServer is the server API for Com service.
 // All implementations must embed UnimplementedComServer
 // for forward compatibility
 type ComServer interface {
 	MoveContainer(Com_MoveContainerServer) error
 	FetchShip(context.Context, *ShipAccess) (*ShipResponse, error)
+	FetchList(context.Context, *Header) (*ShipList, error)
 	mustEmbedUnimplementedComServer()
 }
 
@@ -92,6 +103,9 @@ func (UnimplementedComServer) MoveContainer(Com_MoveContainerServer) error {
 }
 func (UnimplementedComServer) FetchShip(context.Context, *ShipAccess) (*ShipResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FetchShip not implemented")
+}
+func (UnimplementedComServer) FetchList(context.Context, *Header) (*ShipList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchList not implemented")
 }
 func (UnimplementedComServer) mustEmbedUnimplementedComServer() {}
 
@@ -150,6 +164,24 @@ func _Com_FetchShip_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Com_FetchList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Header)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ComServer).FetchList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Com/FetchList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ComServer).FetchList(ctx, req.(*Header))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Com_ServiceDesc is the grpc.ServiceDesc for Com service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -160,6 +192,10 @@ var Com_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FetchShip",
 			Handler:    _Com_FetchShip_Handler,
+		},
+		{
+			MethodName: "FetchList",
+			Handler:    _Com_FetchList_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

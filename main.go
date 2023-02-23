@@ -6,19 +6,13 @@ import (
 	"io"
 	"net"
 	"sync"
-
-	// "log"
 	"time"
 
 	pb "github.com/HaiHart/ShipdockServer/proto"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-
-	// "google.golang.org/grpc/credentials"
-	// "google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	// grpc "google.golang.org/grpc"
 )
 
 type Container struct {
@@ -53,6 +47,25 @@ type SerConn struct {
 	lock        sync.Mutex
 	currCommand []Container
 	port        int32
+}
+
+func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList, error) {
+	fmt.Println(time.Time)
+
+	var list []*pb.ContainerSet
+
+	for _, v := range s.cache {
+		list = append(list, &pb.ContainerSet{
+			Name:  v.Name,
+			Id:    v.Iden,
+			Key:   v.Key,
+			Place: v.Placed,
+		})
+	}
+
+	return &pb.ShipList{
+		List: list,
+	}, nil
 }
 
 func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
@@ -251,6 +264,50 @@ func main() {
 		port:    8080,
 		context: ctx,
 		cancel:  cancel,
+		cache: []Container{
+			{
+				Name:   "No 1",
+				Placed: -1,
+				Iden:   "1",
+				Key:    0,
+				inTime: time.Now(),
+			},
+			{
+				Name:   "No 2",
+				Placed: -1,
+				Iden:   "2",
+				Key:    1,
+				inTime: time.Now(),
+			},
+			{
+				Name:   "No 3",
+				Placed: -1,
+				Iden:   "3",
+				Key:    2,
+				inTime: time.Now(),
+			},
+			{
+				Name:   "No 4",
+				Placed: -1,
+				Iden:   "4",
+				Key:    3,
+				inTime: time.Now(),
+			},
+			{
+				Name:   "No 5",
+				Placed: -1,
+				Iden:   "5",
+				Key:    4,
+				inTime: time.Now(),
+			},
+			{
+				Name:   "No 6",
+				Placed: -1,
+				Iden:   "6",
+				Key:    5,
+				inTime: time.Now(),
+			},
+		},
 	}
 	var group errgroup.Group
 	fmt.Println("here")
