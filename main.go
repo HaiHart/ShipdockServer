@@ -97,6 +97,7 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 		if err != nil {
 			return err
 		}
+		fmt.Printf("got command at %v\n", time.Now().UTC())
 		var changes = Container{
 			Name:   in.List[0].Name,
 			Placed: (in.List[0].Place),
@@ -139,6 +140,8 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32) {
 				NewPlace: new_place,
 			},
 		},
+		Swap: false,
+		Err:  "None",
 	}
 
 	if s.CheckOnCacheMove(changes, new_place) {
@@ -146,6 +149,7 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32) {
 		for _, i := range s.toSend {
 			i <- new_move
 		}
+		s.Swap(changes.Iden, int(new_place))
 	}
 
 	return
@@ -173,6 +177,8 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container) {
 				NewPlace: changes.Placed,
 			},
 		},
+		Swap: true,
+		Err:  "None",
 	}
 
 	if s.CheckOnCacheSwap(changes, changes_2) {
@@ -180,6 +186,7 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container) {
 		for _, i := range s.toSend {
 			i <- new_move
 		}
+		s.Swap(changes.Iden, int(changes_2.Placed))
 	}
 
 	return
@@ -237,6 +244,39 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 	return nil, nil
 }
 
+func (s *SerConn) Swap(x string, place int) {
+	s.lock.Lock()
+	for k, v := range s.cache {
+		if v.Iden == x {
+			if place == -1 {
+				(s.cache)[k] = Container{
+					Iden:   v.Iden,
+					Name:   v.Name,
+					Placed: int32(place),
+				}
+			} else {
+				for i, j := range s.cache {
+					if j.Placed == int32(place) {
+						(s.cache)[i] = Container{
+							Iden:   j.Iden,
+							Name:   j.Name,
+							Placed: v.Placed,
+						}
+					}
+				}
+				(s.cache)[k] = Container{
+					Iden:   v.Iden,
+					Name:   v.Name,
+					Placed: int32(place),
+				}
+
+			}
+
+		}
+	}
+	s.lock.Unlock()
+}
+
 func (s *SerConn) Start() error {
 	ln, _ := net.Listen("tcp", fmt.Sprintf("localhost:%v", s.port))
 	var opts []grpc.ServerOption
@@ -266,48 +306,50 @@ func main() {
 		cancel:  cancel,
 		cache: []Container{
 			{
-				Name:   "No 1",
+				Name:   "1",
 				Placed: -1,
 				Iden:   "1",
 				Key:    0,
 				inTime: time.Now(),
 			},
 			{
-				Name:   "No 2",
+				Name:   "2",
 				Placed: -1,
 				Iden:   "2",
 				Key:    1,
 				inTime: time.Now(),
 			},
 			{
-				Name:   "No 3",
+				Name:   "3",
 				Placed: -1,
 				Iden:   "3",
 				Key:    2,
 				inTime: time.Now(),
 			},
 			{
-				Name:   "No 4",
+				Name:   "4",
 				Placed: -1,
 				Iden:   "4",
 				Key:    3,
 				inTime: time.Now(),
 			},
 			{
-				Name:   "No 5",
+				Name:   "5",
 				Placed: -1,
 				Iden:   "5",
 				Key:    4,
 				inTime: time.Now(),
 			},
 			{
-				Name:   "No 6",
+				Name:   "6",
 				Placed: -1,
 				Iden:   "6",
 				Key:    5,
 				inTime: time.Now(),
 			},
 		},
+		toSend:  make(map[string]chan *pb.Pack),
+		clients: make(map[string]RelayConn),
 	}
 	var group errgroup.Group
 	fmt.Println("here")
