@@ -50,4 +50,5 @@ message ShipResponse{
 
 message ShipList{
     repeated ContainerSet list=1;
+    repeated string log=2;
 }

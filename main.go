@@ -47,12 +47,15 @@ type SerConn struct {
 	lock        sync.Mutex
 	currCommand []Container
 	port        int32
+	log         []string
 }
 
 func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList, error) {
 	fmt.Println(time.Time)
 
 	var list []*pb.ContainerSet
+
+	var log []string=make([]string, 0)
 
 	for _, v := range s.cache {
 		list = append(list, &pb.ContainerSet{
@@ -62,9 +65,13 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 			Place: v.Placed,
 		})
 	}
+	for _,v:=range s.log{
+		log = append(log, v)
+	}
 
 	return &pb.ShipList{
 		List: list,
+		Log: log,
 	}, nil
 }
 
@@ -246,6 +253,7 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 
 func (s *SerConn) Swap(x string, place int) {
 	s.lock.Lock()
+	var rv string = ""
 	for k, v := range s.cache {
 		if v.Iden == x {
 			if place == -1 {
@@ -254,6 +262,7 @@ func (s *SerConn) Swap(x string, place int) {
 					Name:   v.Name,
 					Placed: int32(place),
 				}
+				rv = string(fmt.Sprintf("%d is moved to %d at %v", index, id, time.Now().Format(time.ANSIC)))
 			} else {
 				for i, j := range s.cache {
 					if j.Placed == int32(place) {
@@ -263,18 +272,24 @@ func (s *SerConn) Swap(x string, place int) {
 							Placed: v.Placed,
 						}
 					}
+					rv = string(fmt.Sprintf("%d is switched with %d at %v", index, j.Iden, time.Now().Format(time.ANSIC)))
 				}
 				(s.cache)[k] = Container{
 					Iden:   v.Iden,
 					Name:   v.Name,
 					Placed: int32(place),
 				}
+				if len(rv) < 1 {
+					rv = string(fmt.Sprintf("%d is moved to %d at %v", index, id, time.Now().Format(time.ANSIC)))
+				}
 
 			}
 
 		}
 	}
+	s.log=append(s.log, rv)
 	s.lock.Unlock()
+	
 }
 
 func (s *SerConn) Start() error {
@@ -350,6 +365,7 @@ func main() {
 		},
 		toSend:  make(map[string]chan *pb.Pack),
 		clients: make(map[string]RelayConn),
+		log: make([]string, 0),
 	}
 	var group errgroup.Group
 	fmt.Println("here")
