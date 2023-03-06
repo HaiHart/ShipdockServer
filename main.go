@@ -55,7 +55,7 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 
 	var list []*pb.ContainerSet
 
-	var log []string=make([]string, 0)
+	var log []string = make([]string, 0)
 
 	for _, v := range s.cache {
 		list = append(list, &pb.ContainerSet{
@@ -65,13 +65,13 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 			Place: v.Placed,
 		})
 	}
-	for _,v:=range s.log{
+	for _, v := range s.log {
 		log = append(log, v)
 	}
 
 	return &pb.ShipList{
 		List: list,
-		Log: log,
+		Log:  log,
 	}, nil
 }
 
@@ -104,7 +104,7 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("got command at %v\n", time.Now().UTC())
+		fmt.Printf("got command at %v\n", time.Now().UTC() )
 		var changes = Container{
 			Name:   in.List[0].Name,
 			Placed: (in.List[0].Place),
@@ -151,6 +151,7 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32) {
 		Err:  "None",
 	}
 
+	// fmt.Println(new_place)
 	if s.CheckOnCacheMove(changes, new_place) {
 		s.currCommand = append([]Container{*changes}, s.currCommand...)
 		for _, i := range s.toSend {
@@ -187,7 +188,6 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container) {
 		Swap: true,
 		Err:  "None",
 	}
-
 	if s.CheckOnCacheSwap(changes, changes_2) {
 		s.currCommand = append([]Container{*changes, *changes_2}, s.currCommand...)
 		for _, i := range s.toSend {
@@ -216,7 +216,6 @@ func (s *SerConn) CheckOnCacheMove(changes *Container, new_place int32) bool {
 			if v.Placed != changes.Placed {
 				return false
 			}
-			v.Placed = new_place
 		}
 	}
 	return true
@@ -236,6 +235,7 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) boo
 			return false
 		}
 	}
+	fmt.Println("Here")
 	for _, v := range s.cache {
 		if v.Iden == changes.Iden {
 			v.Placed = changes_2.Placed
@@ -252,7 +252,8 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 }
 
 func (s *SerConn) Swap(x string, place int) {
-	s.lock.Lock()
+	// s.lock.Lock()
+	// defer s.lock.Unlock()
 	var rv string = ""
 	for k, v := range s.cache {
 		if v.Iden == x {
@@ -262,17 +263,17 @@ func (s *SerConn) Swap(x string, place int) {
 					Name:   v.Name,
 					Placed: int32(place),
 				}
-				rv = string(fmt.Sprintf("%d is moved to %d at %v", index, id, time.Now().Format(time.ANSIC)))
+				rv = string(fmt.Sprintf("%v is moved to %v at %v", x, place, time.Now().Format(time.ANSIC)))
 			} else {
 				for i, j := range s.cache {
-					if j.Placed == int32(place) {
+					if j.Placed == int32(place) && j.Iden != x {
 						(s.cache)[i] = Container{
 							Iden:   j.Iden,
 							Name:   j.Name,
 							Placed: v.Placed,
 						}
 					}
-					rv = string(fmt.Sprintf("%d is switched with %d at %v", index, j.Iden, time.Now().Format(time.ANSIC)))
+					rv = string(fmt.Sprintf("%v is switched with %v at %v", v.Iden, j.Iden, time.Now().Format(time.ANSIC)))
 				}
 				(s.cache)[k] = Container{
 					Iden:   v.Iden,
@@ -280,16 +281,16 @@ func (s *SerConn) Swap(x string, place int) {
 					Placed: int32(place),
 				}
 				if len(rv) < 1 {
-					rv = string(fmt.Sprintf("%d is moved to %d at %v", index, id, time.Now().Format(time.ANSIC)))
+					rv = string(fmt.Sprintf("%v is moved to %d at %v", x, place, time.Now().Format(time.ANSIC)))
 				}
 
 			}
 
 		}
 	}
-	s.log=append(s.log, rv)
-	s.lock.Unlock()
-	
+	fmt.Println(rv, place)
+	s.log = append(s.log, rv)
+
 }
 
 func (s *SerConn) Start() error {
@@ -365,7 +366,7 @@ func main() {
 		},
 		toSend:  make(map[string]chan *pb.Pack),
 		clients: make(map[string]RelayConn),
-		log: make([]string, 0),
+		log:     make([]string, 0),
 	}
 	var group errgroup.Group
 	fmt.Println("here")
