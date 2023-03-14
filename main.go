@@ -48,6 +48,7 @@ type SerConn struct {
 	currCommand []Container
 	port        int32
 	log         []string
+	detailLog   []string
 }
 
 func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList, error) {
@@ -104,7 +105,7 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("got command at %v\n", time.Now().UTC() )
+		fmt.Printf("got command at %v\n", time.Now().UTC())
 		var changes = Container{
 			Name:   in.List[0].Name,
 			Placed: (in.List[0].Place),
@@ -122,16 +123,16 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 				Iden:   in.List[1].Id,
 				inTime: in.List[1].Time.AsTime(),
 			}
-			s.ValidSwap(&changes, &changes_2)
+			s.ValidSwap(&changes, &changes_2, peerID)
 		}
 
-		s.ValidMove(&changes, new_place)
+		s.ValidMove(&changes, new_place, peerID)
 	}
 
 	return nil
 }
 
-func (s *SerConn) ValidMove(changes *Container, new_place int32) {
+func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) {
 
 	if changes == nil {
 		return
@@ -154,16 +155,22 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32) {
 	// fmt.Println(new_place)
 	if s.CheckOnCacheMove(changes, new_place) {
 		s.currCommand = append([]Container{*changes}, s.currCommand...)
+		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID,len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
+		s.detailLog = append(s.detailLog, detail)
+		s.Swap(changes.Iden, int(new_place))
 		for _, i := range s.toSend {
 			i <- new_move
 		}
-		s.Swap(changes.Iden, int(new_place))
+
+	} else {
+		new_move.Err = "Miss match starting point"
+		s.toSend[peerID] <- new_move
 	}
 
 	return
 }
 
-func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container) {
+func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD string) {
 	if changes == nil || changes_2 == nil {
 		return
 	}
@@ -193,7 +200,12 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container) {
 		for _, i := range s.toSend {
 			i <- new_move
 		}
+		var detail = fmt.Sprintf("%v:%v:%v is switched with %v at %v", peerOD,len(s.log), changes.Iden, changes_2.Iden, time.Now().Format(time.ANSIC))
+		s.detailLog = append(s.detailLog, detail)
 		s.Swap(changes.Iden, int(changes_2.Placed))
+	} else {
+		new_move.Err = "Miss match starting point"
+		s.toSend[peerOD] <- new_move
 	}
 
 	return
@@ -206,6 +218,9 @@ func (s *SerConn) CheckOnCacheMove(changes *Container, new_place int32) bool {
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if changes.Placed == new_place {
+		return false
+	}
 	for _, v := range s.cache {
 		if v.Placed == new_place && new_place != -1 {
 			return false
@@ -227,6 +242,9 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) boo
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if changes.Placed == changes_2.Placed {
+		return false
+	}
 	for _, v := range s.cache {
 		if v.Iden == changes.Iden && v.Placed != changes.Placed {
 			return false
@@ -266,24 +284,25 @@ func (s *SerConn) Swap(x string, place int) {
 				rv = string(fmt.Sprintf("%v is moved to %v at %v", x, place, time.Now().Format(time.ANSIC)))
 			} else {
 				for i, j := range s.cache {
-					if j.Placed == int32(place) && j.Iden != x {
-						(s.cache)[i] = Container{
-							Iden:   j.Iden,
-							Name:   j.Name,
-							Placed: v.Placed,
+					if j.Placed == int32(place) {
+						if j.Iden != x {
+							(s.cache)[i] = Container{
+								Iden:   j.Iden,
+								Name:   j.Name,
+								Placed: v.Placed,
+							}
+							rv = string(fmt.Sprintf("%v is switched with %v at %v", x, j.Iden, time.Now().Format(time.ANSIC)))
 						}
 					}
-					rv = string(fmt.Sprintf("%v is switched with %v at %v", v.Iden, j.Iden, time.Now().Format(time.ANSIC)))
 				}
-				(s.cache)[k] = Container{
-					Iden:   v.Iden,
-					Name:   v.Name,
-					Placed: int32(place),
-				}
-				if len(rv) < 1 {
-					rv = string(fmt.Sprintf("%v is moved to %d at %v", x, place, time.Now().Format(time.ANSIC)))
-				}
-
+			}
+			(s.cache)[k] = Container{
+				Iden:   v.Iden,
+				Name:   v.Name,
+				Placed: int32(place),
+			}
+			if len(rv) < 1 {
+				rv = string(fmt.Sprintf("%v is moved to %d at %v", x, place, time.Now().Format(time.ANSIC)))
 			}
 
 		}
@@ -364,9 +383,10 @@ func main() {
 				inTime: time.Now(),
 			},
 		},
-		toSend:  make(map[string]chan *pb.Pack),
-		clients: make(map[string]RelayConn),
-		log:     make([]string, 0),
+		toSend:    make(map[string]chan *pb.Pack),
+		clients:   make(map[string]RelayConn),
+		log:       make([]string, 0),
+		detailLog: make([]string, 0),
 	}
 	var group errgroup.Group
 	fmt.Println("here")
