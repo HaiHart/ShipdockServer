@@ -15,11 +15,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type detail struct{
-	From string
+type detail struct {
+	From   string
 	atTime string
-	by string
-	owner string
+	by     string
+	owner  string
 }
 type Container struct {
 	Name   string
@@ -71,6 +71,12 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 			Id:    v.Iden,
 			Key:   v.Key,
 			Place: v.Placed,
+			Detail: &pb.Detail{
+				From:   v.Detail.From,
+				By:     v.Detail.by,
+				AtTime: v.Detail.atTime,
+				Owner:  v.Detail.owner,
+			},
 		})
 	}
 	for _, v := range s.log {
@@ -119,6 +125,12 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 			Key:    0,
 			Iden:   in.List[0].Id,
 			inTime: in.List[0].Time.AsTime(),
+			Detail: detail{
+				From:   in.List[0].Detail.From,
+				atTime: in.List[0].Detail.AtTime,
+				by:     in.List[0].Detail.By,
+				owner:  in.List[0].Detail.Owner,
+			},
 		}
 		var new_place = in.List[0].NewPlace
 		var swap = in.Swap
@@ -129,6 +141,12 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 				Key:    0,
 				Iden:   in.List[1].Id,
 				inTime: in.List[1].Time.AsTime(),
+				Detail: detail{
+					From:   in.List[1].Detail.From,
+					atTime: in.List[1].Detail.AtTime,
+					by:     in.List[1].Detail.By,
+					owner:  in.List[1].Detail.Owner,
+				},
 			}
 			s.ValidSwap(&changes, &changes_2, peerID)
 		}
@@ -153,6 +171,12 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) 
 				Place:    changes.Placed,
 				Time:     timestamppb.New(changes.inTime),
 				NewPlace: new_place,
+				Detail: &pb.Detail{
+					From:   changes.Detail.From,
+					AtTime: changes.Detail.atTime,
+					By:     changes.Detail.by,
+					Owner:  changes.Detail.owner,
+				},
 			},
 		},
 		Swap: false,
@@ -162,7 +186,7 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) 
 	// fmt.Println(new_place)
 	if s.CheckOnCacheMove(changes, new_place) {
 		s.currCommand = append([]Container{*changes}, s.currCommand...)
-		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID,len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
+		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID, len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
 		s.Swap(changes.Iden, int(new_place))
 		for _, i := range s.toSend {
@@ -190,6 +214,12 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 				Place:    changes.Placed,
 				Time:     timestamppb.New(changes.inTime),
 				NewPlace: changes_2.Placed,
+				Detail: &pb.Detail{
+					From:   changes.Detail.From,
+					AtTime: changes.Detail.atTime,
+					By:     changes.Detail.by,
+					Owner:  changes.Detail.owner,
+				},
 			},
 			{
 				Name:     changes_2.Name,
@@ -197,6 +227,12 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 				Place:    changes_2.Placed,
 				Time:     timestamppb.New(changes_2.inTime),
 				NewPlace: changes.Placed,
+				Detail: &pb.Detail{
+					From:   changes_2.Detail.From,
+					AtTime: changes_2.Detail.atTime,
+					By:     changes_2.Detail.by,
+					Owner:  changes_2.Detail.owner,
+				},
 			},
 		},
 		Swap: true,
@@ -207,7 +243,7 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 		for _, i := range s.toSend {
 			i <- new_move
 		}
-		var detail = fmt.Sprintf("%v:%v:%v is switched with %v at %v", peerOD,len(s.log), changes.Iden, changes_2.Iden, time.Now().Format(time.ANSIC))
+		var detail = fmt.Sprintf("%v:%v:%v is switched with %v at %v", peerOD, len(s.log), changes.Iden, changes_2.Iden, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
 		s.Swap(changes.Iden, int(changes_2.Placed))
 	} else {
@@ -287,6 +323,7 @@ func (s *SerConn) Swap(x string, place int) {
 					Iden:   v.Iden,
 					Name:   v.Name,
 					Placed: int32(place),
+					Detail: v.Detail,
 				}
 				rv = string(fmt.Sprintf("%v is moved to %v at %v", x, place, time.Now().Format(time.ANSIC)))
 			} else {
@@ -297,6 +334,7 @@ func (s *SerConn) Swap(x string, place int) {
 								Iden:   j.Iden,
 								Name:   j.Name,
 								Placed: v.Placed,
+								Detail: j.Detail,
 							}
 							rv = string(fmt.Sprintf("%v is switched with %v at %v", x, j.Iden, time.Now().Format(time.ANSIC)))
 						}
@@ -306,7 +344,9 @@ func (s *SerConn) Swap(x string, place int) {
 			(s.cache)[k] = Container{
 				Iden:   v.Iden,
 				Name:   v.Name,
+				// Key:    v.Key,
 				Placed: int32(place),
+				Detail: v.Detail,
 			}
 			if len(rv) < 1 {
 				rv = string(fmt.Sprintf("%v is moved to %d at %v", x, place, time.Now().Format(time.ANSIC)))
@@ -354,10 +394,10 @@ func main() {
 				Key:    0,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner A",
-					From: "USA",
+					by:     "Planner A",
+					From:   "USA",
 					atTime: "12/5/2022",
-					owner: "Chevorale",
+					owner:  "Chevorale",
 				},
 			},
 			{
@@ -367,10 +407,10 @@ func main() {
 				Key:    1,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner B",
-					From: "BR",
+					by:     "Planner B",
+					From:   "BR",
 					atTime: "12/5/2022",
-					owner: "Rio Cargo",
+					owner:  "Rio Cargo",
 				},
 			},
 			{
@@ -380,10 +420,10 @@ func main() {
 				Key:    2,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner C",
-					From: "CEZ",
+					by:     "Planner C",
+					From:   "CEZ",
 					atTime: "12/5/2022",
-					owner: "Winston Housing",
+					owner:  "Winston Housing",
 				},
 			},
 			{
@@ -393,10 +433,10 @@ func main() {
 				Key:    3,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner D",
-					From: "JP",
+					by:     "Planner D",
+					From:   "JP",
 					atTime: "12/5/2022",
-					owner: "Mitsubishi Elc",
+					owner:  "Mitsubishi Elc",
 				},
 			},
 			{
@@ -406,10 +446,10 @@ func main() {
 				Key:    4,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner E",
-					From: "SA",
+					by:     "Planner E",
+					From:   "SA",
 					atTime: "12/5/2022",
-					owner: "SA trade assoc",
+					owner:  "SA trade assoc",
 				},
 			},
 			{
@@ -419,10 +459,10 @@ func main() {
 				Key:    5,
 				inTime: time.Now(),
 				Detail: detail{
-					by: "Planner F",
-					From: "CN",
+					by:     "Planner F",
+					From:   "CN",
 					atTime: "12/5/2022",
-					owner: "North Start inc",
+					owner:  "North Start inc",
 				},
 			},
 		},
