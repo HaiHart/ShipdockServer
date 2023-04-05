@@ -13,12 +13,20 @@ message Header{
     google.protobuf.Timestamp time =1;
 }
 
+message Detail{
+    string from=1;
+    string owner=2;
+    string atTime=3;
+    string by =4;
+}
+
 message Container{
     string id =1;
     google.protobuf.Timestamp time =2;
     int32 place =3;
     string name = 4;
     int32 new_place=5;
+    Detail detail=6;
 }
 
 message ContainerSet{

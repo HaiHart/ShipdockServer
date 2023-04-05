@@ -15,11 +15,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type detail struct{
+	From string
+	atTime string
+	by string
+	owner string
+}
 type Container struct {
 	Name   string
 	Placed int32
 	Iden   string
 	Key    int32
+	Detail detail
 	inTime time.Time
 }
 
@@ -346,6 +353,12 @@ func main() {
 				Iden:   "1",
 				Key:    0,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner A",
+					From: "USA",
+					atTime: "12/5/2022",
+					owner: "Chevorale",
+				},
 			},
 			{
 				Name:   "2",
@@ -353,6 +366,12 @@ func main() {
 				Iden:   "2",
 				Key:    1,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner B",
+					From: "BR",
+					atTime: "12/5/2022",
+					owner: "Rio Cargo",
+				},
 			},
 			{
 				Name:   "3",
@@ -360,6 +379,12 @@ func main() {
 				Iden:   "3",
 				Key:    2,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner C",
+					From: "CEZ",
+					atTime: "12/5/2022",
+					owner: "Winston Housing",
+				},
 			},
 			{
 				Name:   "4",
@@ -367,6 +392,12 @@ func main() {
 				Iden:   "4",
 				Key:    3,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner D",
+					From: "JP",
+					atTime: "12/5/2022",
+					owner: "Mitsubishi Elc",
+				},
 			},
 			{
 				Name:   "5",
@@ -374,6 +405,12 @@ func main() {
 				Iden:   "5",
 				Key:    4,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner E",
+					From: "SA",
+					atTime: "12/5/2022",
+					owner: "SA trade assoc",
+				},
 			},
 			{
 				Name:   "6",
@@ -381,6 +418,12 @@ func main() {
 				Iden:   "6",
 				Key:    5,
 				inTime: time.Now(),
+				Detail: detail{
+					by: "Planner F",
+					From: "CN",
+					atTime: "12/5/2022",
+					owner: "North Start inc",
+				},
 			},
 		},
 		toSend:    make(map[string]chan *pb.Pack),
