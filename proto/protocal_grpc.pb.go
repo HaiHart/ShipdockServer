@@ -25,6 +25,8 @@ type ComClient interface {
 	MoveContainer(ctx context.Context, opts ...grpc.CallOption) (Com_MoveContainerClient, error)
 	FetchShip(ctx context.Context, in *ShipAccess, opts ...grpc.CallOption) (*ShipResponse, error)
 	FetchList(ctx context.Context, in *Header, opts ...grpc.CallOption) (*ShipList, error)
+	FetchDocks(ctx context.Context, in *Header, opts ...grpc.CallOption) (*Docks, error)
+	MoveShip(ctx context.Context, opts ...grpc.CallOption) (Com_MoveShipClient, error)
 }
 
 type comClient struct {
@@ -84,6 +86,46 @@ func (c *comClient) FetchList(ctx context.Context, in *Header, opts ...grpc.Call
 	return out, nil
 }
 
+func (c *comClient) FetchDocks(ctx context.Context, in *Header, opts ...grpc.CallOption) (*Docks, error) {
+	out := new(Docks)
+	err := c.cc.Invoke(ctx, "/proto.Com/FetchDocks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *comClient) MoveShip(ctx context.Context, opts ...grpc.CallOption) (Com_MoveShipClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Com_ServiceDesc.Streams[1], "/proto.Com/MoveShip", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &comMoveShipClient{stream}
+	return x, nil
+}
+
+type Com_MoveShipClient interface {
+	Send(*PlaceShip) error
+	Recv() (*PlaceShip, error)
+	grpc.ClientStream
+}
+
+type comMoveShipClient struct {
+	grpc.ClientStream
+}
+
+func (x *comMoveShipClient) Send(m *PlaceShip) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *comMoveShipClient) Recv() (*PlaceShip, error) {
+	m := new(PlaceShip)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ComServer is the server API for Com service.
 // All implementations must embed UnimplementedComServer
 // for forward compatibility
@@ -91,6 +133,8 @@ type ComServer interface {
 	MoveContainer(Com_MoveContainerServer) error
 	FetchShip(context.Context, *ShipAccess) (*ShipResponse, error)
 	FetchList(context.Context, *Header) (*ShipList, error)
+	FetchDocks(context.Context, *Header) (*Docks, error)
+	MoveShip(Com_MoveShipServer) error
 	mustEmbedUnimplementedComServer()
 }
 
@@ -106,6 +150,12 @@ func (UnimplementedComServer) FetchShip(context.Context, *ShipAccess) (*ShipResp
 }
 func (UnimplementedComServer) FetchList(context.Context, *Header) (*ShipList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FetchList not implemented")
+}
+func (UnimplementedComServer) FetchDocks(context.Context, *Header) (*Docks, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchDocks not implemented")
+}
+func (UnimplementedComServer) MoveShip(Com_MoveShipServer) error {
+	return status.Errorf(codes.Unimplemented, "method MoveShip not implemented")
 }
 func (UnimplementedComServer) mustEmbedUnimplementedComServer() {}
 
@@ -182,6 +232,50 @@ func _Com_FetchList_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Com_FetchDocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Header)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ComServer).FetchDocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Com/FetchDocks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ComServer).FetchDocks(ctx, req.(*Header))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Com_MoveShip_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ComServer).MoveShip(&comMoveShipServer{stream})
+}
+
+type Com_MoveShipServer interface {
+	Send(*PlaceShip) error
+	Recv() (*PlaceShip, error)
+	grpc.ServerStream
+}
+
+type comMoveShipServer struct {
+	grpc.ServerStream
+}
+
+func (x *comMoveShipServer) Send(m *PlaceShip) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *comMoveShipServer) Recv() (*PlaceShip, error) {
+	m := new(PlaceShip)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Com_ServiceDesc is the grpc.ServiceDesc for Com service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -197,11 +291,21 @@ var Com_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "FetchList",
 			Handler:    _Com_FetchList_Handler,
 		},
+		{
+			MethodName: "FetchDocks",
+			Handler:    _Com_FetchDocks_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "MoveContainer",
 			Handler:       _Com_MoveContainer_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "MoveShip",
+			Handler:       _Com_MoveShip_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

@@ -7,6 +7,8 @@ service Com{
     rpc MoveContainer(stream Pack) returns (stream Pack);
     rpc FetchShip(ShipAccess) returns (ShipResponse);
     rpc FetchList(Header) returns (ShipList);
+    rpc FetchDocks(Header) returns (Docks);
+    rpc MoveShip(stream PlaceShip) returns (stream PlaceShip);
 }
 
 message Header{
@@ -60,4 +62,37 @@ message ShipResponse{
 message ShipList{
     repeated ContainerSet list=1;
     repeated string log=2;
+}
+
+message Ship {
+	string name=1;
+	int32 placed=2;
+	string Iden=3; 
+	int32 Key=4;
+	Detail detail=5;
+	google.protobuf.Timestamp inTime =6;
+	google.protobuf.Timestamp outTime =7;
+	uint32 length=8;
+}
+
+message Doc{
+	int32 no=1;
+	string name=2;
+	uint32 length=3;
+	int32 boarderRight=4; 
+    repeated string shipList=5;
+}
+
+message Docks{
+    repeated Ship ships=1;
+    repeated Doc docks=2;
+}
+
+message PlaceShip{
+    message ShipList{
+        repeated string list=1;
+    }
+    repeated ShipList shipList=1;
+    Ship ship =2;
+    bool changeTime=3;
 }

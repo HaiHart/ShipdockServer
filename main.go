@@ -30,18 +30,10 @@ type Container struct {
 	inTime time.Time
 }
 
-type CacheField struct {
-}
-
 type RelayConn struct {
 	conn      *grpc.ClientConn
 	client    pb.ComClient
 	reqStream pb.Com_MoveContainerClient
-}
-
-type ResponseMessage struct {
-	msg      interface{}
-	clientID string
 }
 
 type SerConn struct {
@@ -264,6 +256,9 @@ func (s *SerConn) CheckOnCacheMove(changes *Container, new_place int32) bool {
 	if changes.Placed == new_place {
 		return false
 	}
+	if changes.Name == "x" && new_place == -1 {
+		return false
+	}
 	for _, v := range s.cache {
 		if v.Placed == new_place && new_place != -1 {
 			return false
@@ -285,6 +280,15 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) boo
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	if changes.Name == changes_2.Name {
+		return false
+	}
+
+	if changes.Name == "x" || changes_2.Name == "x" {
+		return false
+	}
+
 	if changes.Placed == changes_2.Placed {
 		return false
 	}
@@ -296,7 +300,7 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) boo
 			return false
 		}
 	}
-	fmt.Println("Here")
+	// fmt.Println("Here")
 	for _, v := range s.cache {
 		if v.Iden == changes.Iden {
 			v.Placed = changes_2.Placed
@@ -313,43 +317,39 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 }
 
 func (s *SerConn) Swap(x string, place int) {
-	// s.lock.Lock()
-	// defer s.lock.Unlock()
+
 	var rv string = ""
 	for k, v := range s.cache {
 		if v.Iden == x {
 			if place == -1 {
-				(s.cache)[k] = Container{
-					Iden:   v.Iden,
-					Name:   v.Name,
-					Placed: int32(place),
-					Detail: v.Detail,
-				}
-				rv = string(fmt.Sprintf("%v is moved to %v at %v", x, place, time.Now().Format(time.ANSIC)))
+				(s.cache)[k].Placed = int32(place)
+				rv = string(fmt.Sprintf("%v is moved to %v at %v", v.Name, place, time.Now().Format(time.ANSIC)))
 			} else {
 				for i, j := range s.cache {
 					if j.Placed == int32(place) {
 						if j.Iden != x {
-							(s.cache)[i] = Container{
-								Iden:   j.Iden,
-								Name:   j.Name,
-								Placed: v.Placed,
-								Detail: j.Detail,
-							}
-							rv = string(fmt.Sprintf("%v is switched with %v at %v", x, j.Iden, time.Now().Format(time.ANSIC)))
+							// (s.cache)[i] = Container{
+							// 	Iden:   j.Iden,
+							// 	Name:   j.Name,
+							// 	Placed: v.Placed,
+							// 	Detail: j.Detail,
+							// }
+							(s.cache)[i].Placed = v.Placed
+							rv = string(fmt.Sprintf("%v is switched with %v at %v", v.Name, j.Name, time.Now().Format(time.ANSIC)))
 						}
 					}
 				}
 			}
-			(s.cache)[k] = Container{
-				Iden:   v.Iden,
-				Name:   v.Name,
-				// Key:    v.Key,
-				Placed: int32(place),
-				Detail: v.Detail,
-			}
+			// (s.cache)[k] = Container{
+			// 	Iden:   v.Iden,
+			// 	Name:   v.Name,
+			// 	// Key:    v.Key,
+			// 	Placed: int32(place),
+			// 	Detail: v.Detail,
+			// }
+			(s.cache)[k].Placed = int32(place)
 			if len(rv) < 1 {
-				rv = string(fmt.Sprintf("%v is moved to %d at %v", x, place, time.Now().Format(time.ANSIC)))
+				rv = string(fmt.Sprintf("%v is moved to %d at %v", v.Name, place, time.Now().Format(time.ANSIC)))
 			}
 
 		}
@@ -463,6 +463,84 @@ func main() {
 					From:   "CN",
 					atTime: "12/5/2022",
 					owner:  "North Start inc",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 6,
+				Iden:   "7",
+				Key:    6,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 7,
+				Iden:   "8",
+				Key:    7,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 8,
+				Iden:   "9",
+				Key:    8,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 9,
+				Iden:   "10",
+				Key:    9,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 10,
+				Iden:   "11",
+				Key:    10,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Placed: 11,
+				Iden:   "12",
+				Key:    11,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
 				},
 			},
 		},
