@@ -328,25 +328,14 @@ func (s *SerConn) Swap(x string, place int) {
 				for i, j := range s.cache {
 					if j.Placed == int32(place) {
 						if j.Iden != x {
-							// (s.cache)[i] = Container{
-							// 	Iden:   j.Iden,
-							// 	Name:   j.Name,
-							// 	Placed: v.Placed,
-							// 	Detail: j.Detail,
-							// }
+
 							(s.cache)[i].Placed = v.Placed
 							rv = string(fmt.Sprintf("%v is switched with %v at %v", v.Name, j.Name, time.Now().Format(time.ANSIC)))
 						}
 					}
 				}
 			}
-			// (s.cache)[k] = Container{
-			// 	Iden:   v.Iden,
-			// 	Name:   v.Name,
-			// 	// Key:    v.Key,
-			// 	Placed: int32(place),
-			// 	Detail: v.Detail,
-			// }
+
 			(s.cache)[k].Placed = int32(place)
 			if len(rv) < 1 {
 				rv = string(fmt.Sprintf("%v is moved to %d at %v", v.Name, place, time.Now().Format(time.ANSIC)))
@@ -549,9 +538,153 @@ func main() {
 		log:       make([]string, 0),
 		detailLog: make([]string, 0),
 	}
+	shipServer := ShipConn{
+		port:      8050,
+		context:   ctx,
+		cancel:    cancel,
+		toSend:    make(map[string]chan *pb.PlaceShip),
+		clients:   make(map[string]ShipRelayConn),
+		log:       make([]string, 0),
+		detailLog: make([]string, 0),
+		ships: []Ship{{
+			Name:   "Ship 0",
+			Placed: -1,
+			Iden:   "0",
+			Key:    0,
+			Detail: detail{
+				From:   "AF",
+				atTime: "15/8/2022",
+				by:     "Planner A",
+				owner:  "Ris inc",
+			},
+			Length:  128,
+			InTime:  time.Date(2023, time.February, 15, 18, 30, 0, 0, time.UTC),
+			OutTime: time.Date(2023, time.February, 22, 18, 30, 0, 0, time.UTC),
+		},
+			{
+				Name:   "Ship 1",
+				Placed: -1,
+				Iden:   "1",
+				Key:    1,
+				Detail: detail{
+					From:   "AF_1",
+					atTime: "15/8/2022",
+					by:     "Planner A",
+					owner:  "Ris inc",
+				},
+				Length:  250,
+				InTime:  time.Date(2023, time.February, 20, 18, 30, 0, 0, time.UTC),
+				OutTime: time.Date(2023, time.February, 27, 18, 30, 0, 0, time.UTC),
+			},
+			{
+				Name:   "Ship 2",
+				Placed: -1,
+				Iden:   "2",
+				Key:    2,
+				Detail: detail{
+					From:   "AF_2",
+					atTime: "15/8/2022",
+					by:     "Planner A",
+					owner:  "Ris inc",
+				},
+				Length:  128,
+				InTime:  time.Date(2023, time.February, 23, 18, 30, 0, 0, time.UTC),
+				OutTime: time.Date(2023, time.March, 1, 18, 30, 0, 0, time.UTC),
+			},
+			{
+				Name:   "Ship 3",
+				Placed: -1,
+				Iden:   "3",
+				Key:    3,
+				Detail: detail{
+					From:   "AF_3",
+					atTime: "15/8/2022",
+					by:     "Planner A",
+					owner:  "Ris inc",
+				},
+				Length:  128,
+				InTime:  time.Date(2023, time.March, 5, 18, 30, 0, 0, time.UTC),
+				OutTime: time.Date(2023, time.March, 12, 18, 30, 0, 0, time.UTC),
+			},
+			{
+				Name:   "Ship 4",
+				Placed: -1,
+				Iden:   "4",
+				Key:    4,
+				Detail: detail{
+					From:   "AF_2",
+					atTime: "15/8/2022",
+					by:     "Planner A",
+					owner:  "Ris inc",
+				},
+				Length:  250,
+				InTime:  time.Date(2023, time.March, 14, 18, 30, 0, 0, time.UTC),
+				OutTime: time.Date(2023, time.March, 22, 18, 30, 0, 0, time.UTC),
+			},
+			{
+				Name:   "Ship 5",
+				Placed: -1,
+				Iden:   "5",
+				Key:    5,
+				Detail: detail{
+					From:   "AF_2",
+					atTime: "15/8/2022",
+					by:     "Planner A",
+					owner:  "Ris inc",
+				},
+				Length:  128,
+				InTime:  time.Date(2023, time.March, 23, 18, 30, 0, 0, time.UTC),
+				OutTime: time.Date(2023, time.March, 30, 18, 30, 0, 0, time.UTC),
+			},
+		},
+		docks: []Doc{
+			{
+				No:           0,
+				Name:         "doc_0",
+				Length:       200,
+				BoarderRight: 1,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           1,
+				Name:         "doc_1",
+				Length:       200,
+				BoarderRight: 2,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           2,
+				Name:         "doc_2",
+				Length:       200,
+				BoarderRight: -1,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           3,
+				Name:         "doc_3",
+				Length:       200,
+				BoarderRight: 4,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           4,
+				Name:         "doc_4",
+				Length:       200,
+				BoarderRight: 5,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           5,
+				Name:         "doc_5",
+				Length:       200,
+				BoarderRight: -1,
+				ShipList:     make([]string, 0),
+			},
+		}}
 	var group errgroup.Group
 	fmt.Println("here")
 	group.Go(server.RunServer)
+	group.Go(shipServer.RunServer)
 	fmt.Println("Started")
 
 	err := group.Wait()

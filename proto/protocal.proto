@@ -95,5 +95,7 @@ message PlaceShip{
     }
     repeated ShipList shipList=1;
     Ship ship =2;
+    int32 place=4;
     bool changeTime=3;
+    string err=5;
 }
