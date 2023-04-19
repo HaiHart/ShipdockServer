@@ -79,6 +79,7 @@ func (s *ShipConn) FetchDocks(ctx context.Context, time *pb.Header) (*pb.Docks, 
 			},
 			InTime:  timestamppb.New(v.InTime),
 			OutTime: timestamppb.New(v.OutTime),
+			Length: v.Length,
 		})
 	}
 	for _, v := range s.log {
@@ -91,7 +92,7 @@ func (s *ShipConn) FetchDocks(ctx context.Context, time *pb.Header) (*pb.Docks, 
 			Name:         v.Name,
 			Length:       v.Length,
 			BoarderRight: int32(v.BoarderRight),
-			ShipList:     v.ShipList,
+			ShipList:     append([]string{}, v.ShipList...),
 		})
 	}
 
@@ -104,8 +105,14 @@ func (s *ShipConn) FetchDocks(ctx context.Context, time *pb.Header) (*pb.Docks, 
 
 func (s *ShipConn) checkShipList(sl [][]string) bool {
 
-	for i := range sl {
-		for j := range s.docks[i].ShipList {
+	if len(sl) != len(s.docks) {
+		return false
+	}
+	for i := 0; i < len(sl); i++ {
+		if len(sl[i]) != len(s.docks[i].ShipList) {
+			return false
+		}
+		for j := 0; j < len(s.docks[i].ShipList); j++ {
 			if sl[i][j] != s.docks[i].ShipList[j] {
 				return false
 			}
@@ -156,15 +163,10 @@ func (s *ShipConn) checkTime(doc int, ship int) int {
 	out := s.ships[ship].OutTime
 	in := s.ships[ship].InTime
 	dock := s.docks[doc]
-	rv := 0
 	for i := len(dock.ShipList) - 1; i >= 0; i-- {
-		if dock.ShipList[i] == "" {
-			rv = i
-			continue
-		}
 		temp := s.ships[s.getShip(dock.ShipList[i])]
 		if temp.OutTime.Before(in) {
-			rv = i + 1
+			return i + 1
 		} else {
 			if temp.InTime.Before(out) {
 				fmt.Println(doc, " ", dock.ShipList)
@@ -173,7 +175,7 @@ func (s *ShipConn) checkTime(doc int, ship int) int {
 			}
 		}
 	}
-	return rv
+	return 0
 }
 
 func (s *ShipConn) setShip(doc int, name string, idx int) {
@@ -216,7 +218,6 @@ func (s *ShipConn) setShip(doc int, name string, idx int) {
 func (s *ShipConn) placeShip(DocPlace int, Name string) bool {
 	fmt.Println(DocPlace, "  ", Name)
 	if DocPlace == -1 {
-
 		return s.removeShip(Name)
 	}
 	var rv string = ""
@@ -230,7 +231,6 @@ func (s *ShipConn) placeShip(DocPlace int, Name string) bool {
 		s.removeShip(Name)
 	}
 	listDoc := s.checkFit(doc, ship)
-	var idx int = -1
 	idxes := make([]int, 0)
 	for _, i := range listDoc {
 		j := s.checkTime(i, ship)
@@ -243,20 +243,17 @@ func (s *ShipConn) placeShip(DocPlace int, Name string) bool {
 			fmt.Println("End no place")
 			return false
 		}
-		if i > idx {
-			idx = i
-		}
 	}
 
 	s.ships[ship].Placed = doc
-	for _, i := range listDoc {
-		s.setShip(i, Name, idx)
+	for k, i := range listDoc {
+		s.setShip(i, Name, idxes[k])
 	}
 	if len(listDoc) == 0 || len(idxes) == 0 {
 		fmt.Println("empty")
 		return false
 	}
-	rv = fmt.Sprintf("Ship %s has been set to dock(s): %+q ; at position %v", Name, listDoc, idx)
+	rv = fmt.Sprintf("Ship %s has been set to dock(s): %v ; at position %v ; at time %v", Name,listDoc, idxes, time.Now())
 	s.log = append(s.log, rv)
 	fmt.Println(rv)
 	return true
@@ -280,7 +277,7 @@ func (s *ShipConn) removeShip(Name string) bool {
 	for i, _ := range s.docks {
 		s.removeElement(i, Name)
 	}
-	rv := fmt.Sprintf("Removed ship %s", Name)
+	rv := fmt.Sprintf("Removed ship %s at time %v", Name, time.Now())
 	s.log = append(s.log, rv)
 	return true
 }
@@ -314,15 +311,13 @@ func (s *ShipConn) setTime(Name string, in time.Time, out time.Time) string {
 	ship := s.getShip(Name)
 	s.ships[ship].InTime = in
 	s.ships[ship].OutTime = out
+	s.log = append(s.log, fmt.Sprintf("Changed time to ship %s at time %v", Name, time.Now()))
 	return "success"
 }
 
-func (s *ShipConn) propergate(peerId string, newMove pb.PlaceShip) {
-	for k, i := range s.toSend {
-		if k != peerId {
-			i <- &newMove
-
-		}
+func (s *ShipConn) propergate(newMove pb.PlaceShip) {
+	for _, i := range s.toSend {
+		i <- &newMove
 	}
 }
 
@@ -356,6 +351,35 @@ func (s *ShipConn) MoveShip(msg pb.Com_MoveShipServer) error {
 			return err
 		}
 		fmt.Printf("got command at %v\n", time.Now().UTC())
+
+		s.lock.Lock()
+
+		if in.ChangeTime {
+			var name = in.Ship.Name
+			var inTime = in.Ship.InTime.AsTime()
+			var outTime time.Time = in.Ship.OutTime.AsTime()
+			rv := s.setTime(name, inTime, outTime)
+			if rv == "success" {
+				var res = &pb.PlaceShip{
+					Err: "success",
+					Ship: &pb.Ship{
+						Name:    name,
+						InTime:  timestamppb.New(inTime),
+						OutTime: timestamppb.New(outTime),
+					},
+					ChangeTime: true,
+				}
+				s.propergate(*res)
+				s.lock.Unlock()
+				continue
+			}
+			var res = &pb.PlaceShip{
+				Err: rv,
+			}
+			s.toSend[peerID] <- res
+			s.lock.Unlock()
+			continue
+		}
 		var changes = Ship{
 			Name:   in.Ship.Name,
 			Placed: (int(in.Ship.Placed)),
@@ -371,43 +395,27 @@ func (s *ShipConn) MoveShip(msg pb.Com_MoveShipServer) error {
 			OutTime: in.Ship.OutTime.AsTime(),
 			Length:  in.Ship.Length,
 		}
-		if in.ChangeTime {
-			rv := s.setTime(changes.Name, changes.InTime, changes.OutTime)
-			if rv == "success" {
-				var res = &pb.PlaceShip{
-					Err: "",
-					Ship: &pb.Ship{
-						Name:   changes.Name,
-						Placed: int32(changes.Placed),
-						Key:    changes.Key,
-						Iden:   changes.Iden,
-						Detail: &pb.Detail{
-							From:   changes.Detail.From,
-							AtTime: changes.Detail.atTime,
-							By:     changes.Detail.by,
-							Owner:  changes.Detail.owner,
-						},
-						InTime:  timestamppb.New(changes.InTime),
-						OutTime: timestamppb.New(changes.OutTime),
-					},
-				}
-				s.propergate(peerID, *res)
-				continue
-			}
-			var res = &pb.PlaceShip{
-				Err: rv,
-			}
-			s.toSend[peerID] <- res
-			continue
-		}
 		var shipList [][]string
 		for _, i := range in.ShipList {
 			shipList = append(shipList, i.List)
 		}
-		s.lock.Lock()
-		if s.checkShipList(shipList) {
+		if s.checkShipList(shipList) && s.ships[s.getShip(in.Ship.Name)].Placed == int(in.Ship.Placed) {
 			if s.placeShip(int(in.Place), changes.Name) {
-				s.propergate(peerID, *in)
+				var res = &pb.PlaceShip{
+					Ship: &pb.Ship{
+						Name:    in.Ship.Name,
+						Iden:    in.Ship.Iden,
+						Key:     in.Ship.Key,
+						Placed:  in.Ship.Placed,
+						Length:  in.Ship.Length,
+						InTime:  in.Ship.GetInTime(),
+						OutTime: in.Ship.GetOutTime(),
+						Detail:  in.Ship.GetDetail(),
+					},
+					Place:      in.GetPlace(),
+					ChangeTime: false,
+				}
+				s.propergate(*res)
 			}
 		} else {
 			var res = pb.PlaceShip{
@@ -420,7 +428,6 @@ func (s *ShipConn) MoveShip(msg pb.Com_MoveShipServer) error {
 
 	return nil
 }
-
 
 func (s *ShipConn) Start() error {
 	ln, _ := net.Listen("tcp", fmt.Sprintf("localhost:%v", s.port))
