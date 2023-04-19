@@ -86,6 +86,7 @@ message Doc{
 message Docks{
     repeated Ship ships=1;
     repeated Doc docks=2;
+    repeated string log=3;
 }
 
 message PlaceShip{
