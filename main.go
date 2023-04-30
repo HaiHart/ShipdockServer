@@ -21,9 +21,16 @@ type detail struct {
 	by     string
 	owner  string
 }
+
+type Cordinates struct {
+	bay  int
+	row  int
+	tier int
+}
 type Container struct {
 	Name   string
-	Placed int32
+	Cor    Cordinates
+	Type   int
 	Iden   string
 	Key    int32
 	Detail detail
@@ -36,17 +43,25 @@ type RelayConn struct {
 	reqStream pb.Com_MoveContainerClient
 }
 
+type ShipContainer struct {
+	containers []Container
+	invalids   []Cordinates
+	bays       int
+	rows       int
+	tiers      int
+}
+
 type SerConn struct {
 	pb.UnimplementedComServer
 	context     context.Context
 	cancel      context.CancelFunc
-	cache       []Container
+	shipsList   map[string]ShipContainer
 	clients     map[string]RelayConn
 	toSend      map[string]chan *pb.Pack
 	lock        sync.Mutex
 	currCommand []Container
 	port        int32
-	log         []string
+	log         map[string][]string
 	detailLog   []string
 }
 
@@ -57,27 +72,54 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 
 	var log []string = make([]string, 0)
 
-	for _, v := range s.cache {
+	var inval []*pb.Cordinate
+
+	// peerID := time.Name
+
+	// if _, ok := s.accessList[peerID]; !ok {
+	// 	s.accessList[peerID] = time.ShipId
+	// }
+
+	for _, v := range s.shipsList[time.ShipId].containers {
 		list = append(list, &pb.ContainerSet{
-			Name:  v.Name,
-			Id:    v.Iden,
-			Key:   v.Key,
-			Place: v.Placed,
+			Name: v.Name,
+			Id:   v.Iden,
+			Key:  v.Key,
+			Place: &pb.Cordinate{
+				Bay:  int32(v.Cor.bay),
+				Row:  int32(v.Cor.row),
+				Tier: int32(v.Cor.tier),
+			},
 			Detail: &pb.Detail{
 				From:   v.Detail.From,
 				By:     v.Detail.by,
 				AtTime: v.Detail.atTime,
 				Owner:  v.Detail.owner,
 			},
+			Type: int32(v.Type),
 		})
 	}
-	for _, v := range s.log {
+	for _, v := range s.log[time.ShipId] {
 		log = append(log, v)
+	}
+
+	for _, v:= range s.shipsList[time.ShipId].invalids{
+		inval = append(inval, &pb.Cordinate{
+			Bay: int32(v.bay),
+			Row: int32(v.row),
+			Tier: int32(v.tier),
+		})
 	}
 
 	return &pb.ShipList{
 		List: list,
 		Log:  log,
+		Inval: inval,
+		Sizes: &pb.Cordinate{
+			Bay: int32(s.shipsList[time.ShipId].bays),
+			Row: int32(s.shipsList[time.ShipId].rows),
+			Tier: int32(s.shipsList[time.ShipId].tiers),
+		},
 	}, nil
 }
 
@@ -112,8 +154,12 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 		}
 		fmt.Printf("got command at %v\n", time.Now().UTC())
 		var changes = Container{
-			Name:   in.List[0].Name,
-			Placed: (in.List[0].Place),
+			Name: in.List[0].Name,
+			Cor: Cordinates{
+				bay:  int(in.List[0].Place.Bay),
+				row:  int(in.List[0].Place.Row),
+				tier: int(in.List[0].Place.Tier),
+			},
 			Key:    0,
 			Iden:   in.List[0].Id,
 			inTime: in.List[0].Time.AsTime(),
@@ -123,13 +169,23 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 				by:     in.List[0].Detail.By,
 				owner:  in.List[0].Detail.Owner,
 			},
+			Type: int(in.List[0].Type),
 		}
-		var new_place = in.List[0].NewPlace
+		// var new_place = in.List[0].Newlace
+		var new_place = Cordinates{
+			bay:  int(in.List[1].Place.Bay),
+			row:  int(in.List[1].Place.Row),
+			tier: int(in.List[1].Place.Tier),
+		}
 		var swap = in.Swap
 		if swap {
 			var changes_2 = Container{
-				Name:   in.List[1].Name,
-				Placed: (in.List[1].Place),
+				Name: in.List[1].Name,
+				Cor: Cordinates{
+					bay:  int(in.List[1].Place.Bay),
+					row:  int(in.List[1].Place.Row),
+					tier: int(in.List[1].Place.Tier),
+				},
 				Key:    0,
 				Iden:   in.List[1].Id,
 				inTime: in.List[1].Time.AsTime(),
@@ -139,17 +195,18 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 					by:     in.List[1].Detail.By,
 					owner:  in.List[1].Detail.Owner,
 				},
+				Type: int(in.List[1].Type),
 			}
-			s.ValidSwap(&changes, &changes_2, peerID)
+			s.ValidSwap(&changes, &changes_2, peerID, in.ShipName)
 		}
 
-		s.ValidMove(&changes, new_place, peerID)
+		s.ValidMove(&changes, new_place, peerID, in.ShipName)
 	}
 
 	return nil
 }
 
-func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) {
+func (s *SerConn) ValidMove(changes *Container, new_place Cordinates, peerID string, shipName string) {
 
 	if changes == nil {
 		return
@@ -158,11 +215,19 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) 
 	var new_move = &pb.Pack{
 		List: []*pb.Container{
 			{
-				Name:     changes.Name,
-				Id:       changes.Iden,
-				Place:    changes.Placed,
-				Time:     timestamppb.New(changes.inTime),
-				NewPlace: new_place,
+				Name: changes.Name,
+				Id:   changes.Iden,
+				Place: &pb.Cordinate{
+					Bay:  int32(changes.Cor.bay),
+					Row:  int32(changes.Cor.row),
+					Tier: int32(changes.Cor.tier),
+				},
+				Time: timestamppb.New(changes.inTime),
+				NewPlace: &pb.Cordinate{
+					Bay:  int32(new_place.bay),
+					Row:  int32(new_place.row),
+					Tier: int32(new_place.tier),
+				},
 				Detail: &pb.Detail{
 					From:   changes.Detail.From,
 					AtTime: changes.Detail.atTime,
@@ -175,25 +240,24 @@ func (s *SerConn) ValidMove(changes *Container, new_place int32, peerID string) 
 		Err:  "None",
 	}
 
-	// fmt.Println(new_place)
-	if s.CheckOnCacheMove(changes, new_place) {
+	if s.CheckOnCacheMove(changes, new_place, shipName) {
 		s.currCommand = append([]Container{*changes}, s.currCommand...)
 		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID, len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
-		s.Swap(changes.Iden, int(new_place))
+		s.Swap(changes.Iden, new_place, shipName)
 		for _, i := range s.toSend {
 			i <- new_move
 		}
 
 	} else {
-		new_move.Err = "Miss match starting point"
+		new_move.Err = "Miss match occur"
 		s.toSend[peerID] <- new_move
 	}
 
 	return
 }
 
-func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD string) {
+func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD string, shipName string) {
 	if changes == nil || changes_2 == nil {
 		return
 	}
@@ -203,9 +267,17 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 			{
 				Name:     changes.Name,
 				Id:       changes.Iden,
-				Place:    changes.Placed,
+				Place: &pb.Cordinate{
+					Bay:  int32(changes.Cor.bay),
+					Row:  int32(changes.Cor.row),
+					Tier: int32(changes.Cor.tier),
+				},
 				Time:     timestamppb.New(changes.inTime),
-				NewPlace: changes_2.Placed,
+				NewPlace: &pb.Cordinate{
+					Bay:  int32(changes_2.Cor.bay),
+					Row:  int32(changes_2.Cor.row),
+					Tier: int32(changes_2.Cor.tier),
+				},
 				Detail: &pb.Detail{
 					From:   changes.Detail.From,
 					AtTime: changes.Detail.atTime,
@@ -216,9 +288,17 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 			{
 				Name:     changes_2.Name,
 				Id:       changes_2.Iden,
-				Place:    changes_2.Placed,
+				Place:    &pb.Cordinate{
+					Bay:  int32(changes_2.Cor.bay),
+					Row:  int32(changes_2.Cor.row),
+					Tier: int32(changes_2.Cor.tier),
+				},
 				Time:     timestamppb.New(changes_2.inTime),
-				NewPlace: changes.Placed,
+				NewPlace: &pb.Cordinate{
+					Bay:  int32(changes.Cor.bay),
+					Row:  int32(changes.Cor.row),
+					Tier: int32(changes.Cor.tier),
+				},
 				Detail: &pb.Detail{
 					From:   changes_2.Detail.From,
 					AtTime: changes_2.Detail.atTime,
@@ -230,14 +310,14 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 		Swap: true,
 		Err:  "None",
 	}
-	if s.CheckOnCacheSwap(changes, changes_2) {
+	if s.CheckOnCacheSwap(changes, changes_2, shipName) {
 		s.currCommand = append([]Container{*changes, *changes_2}, s.currCommand...)
 		for _, i := range s.toSend {
 			i <- new_move
 		}
 		var detail = fmt.Sprintf("%v:%v:%v is switched with %v at %v", peerOD, len(s.log), changes.Iden, changes_2.Iden, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
-		s.Swap(changes.Iden, int(changes_2.Placed))
+		s.Swap(changes.Iden, changes_2.Cor, shipName)
 	} else {
 		new_move.Err = "Miss match starting point"
 		s.toSend[peerOD] <- new_move
@@ -246,35 +326,54 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 	return
 }
 
-func (s *SerConn) CheckOnCacheMove(changes *Container, new_place int32) bool {
+func (s *SerConn) CheckOnCacheMove(changes *Container, new_place Cordinates, shipName string) bool {
 
 	if changes == nil {
 		return false
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if changes.Placed == new_place {
+
+	if new_place.bay > s.shipsList[shipName].bays || new_place.row > s.shipsList[shipName].rows || new_place.tier > s.shipsList[shipName].tiers {
 		return false
 	}
-	if changes.Name == "x" && new_place == -1 {
+
+	if changes.Cor.bay == new_place.bay && changes.Cor.row == new_place.row && changes.Cor.tier == new_place.tier {
 		return false
 	}
-	for _, v := range s.cache {
-		if v.Placed == new_place && new_place != -1 {
+
+	if changes.Type == 0 && new_place.bay%2==0{
+		return false
+	}
+
+	if changes.Type == 1 && new_place.bay%2==1{
+		return false
+	}
+
+	if changes.Name == "x" && new_place.bay == -1 {
+		return false
+	}
+	for _, v := range s.shipsList[shipName].containers {
+		if v.Cor.bay == new_place.bay && v.Cor.row == new_place.row && v.Cor.tier == new_place.tier && new_place.bay != -1 && new_place.row != -1 && new_place.tier != -1 {
 			return false
 		}
 	}
-	for _, v := range s.cache {
+	for _, v := range s.shipsList[shipName].containers {
 		if v.Iden == changes.Iden {
-			if v.Placed != changes.Placed {
+			if v.Cor.bay != changes.Cor.bay || v.Cor.tier != changes.Cor.row || v.Cor.tier != changes.Cor.tier {
 				return false
 			}
 		}
 	}
+	for _, v := range s.shipsList[shipName].invalids {
+		if v.bay == changes.Cor.bay && v.row==changes.Cor.row&&v.tier==changes.Cor.tier {
+			return false
+		}	
+	}
 	return true
 }
 
-func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) bool {
+func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container, shipName string) bool {
 	if changes == nil || changes_2 == nil {
 		return false
 	}
@@ -289,26 +388,28 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container) boo
 		return false
 	}
 
-	if changes.Placed == changes_2.Placed {
+	if changes.Cor.bay == changes_2.Cor.bay || changes.Cor.row == changes_2.Cor.row || changes.Cor.tier == changes_2.Cor.tier {
 		return false
 	}
-	for _, v := range s.cache {
-		if v.Iden == changes.Iden && v.Placed != changes.Placed {
+	for _, v := range s.shipsList[shipName].containers {
+		if v.Iden == changes.Iden && (v.Cor.bay != changes.Cor.bay || v.Cor.row != changes.Cor.row || v.Cor.tier != changes.Cor.tier) {
 			return false
 		}
-		if v.Iden == changes_2.Iden && v.Placed != changes_2.Placed {
+		if v.Iden == changes_2.Iden && (v.Cor.bay != changes_2.Cor.bay || v.Cor.row != changes_2.Cor.row || v.Cor.tier != changes_2.Cor.tier) {
 			return false
 		}
 	}
-	// fmt.Println("Here")
-	for _, v := range s.cache {
-		if v.Iden == changes.Iden {
-			v.Placed = changes_2.Placed
-		}
-		if v.Iden == changes_2.Iden {
-			v.Placed = changes.Placed
-		}
-	}
+	// for _, v := range s.shipsList[shipName].invalids {
+		
+	// }
+	// for _, v := range s.shipsList[shipName].containers {
+	// 	if v.Iden == changes.Iden {
+	// 		v.Placed = changes_2.Placed
+	// 	}
+	// 	if v.Iden == changes_2.Iden {
+	// 		v.Placed = changes.Placed
+	// 	}
+	// }
 	return true
 }
 
@@ -316,27 +417,27 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 	return nil, nil
 }
 
-func (s *SerConn) Swap(x string, place int) {
+func (s *SerConn) Swap(x string, place Cordinates, shipName string) {
 
 	var rv string = ""
-	for k, v := range s.cache {
+	for k, v := range s.shipsList[shipName].containers {
 		if v.Iden == x {
-			if place == -1 {
-				(s.cache)[k].Placed = int32(place)
+			if place.bay == -1 {
+				(s.shipsList[shipName].containers)[k].Cor = place
 				rv = string(fmt.Sprintf("%v is moved to %v at %v", v.Name, place, time.Now().Format(time.ANSIC)))
 			} else {
-				for i, j := range s.cache {
-					if j.Placed == int32(place) {
+				for i, j := range s.shipsList[shipName].containers {
+					if j.Cor.bay == place.bay && j.Cor.row == place.row && j.Cor.tier == place.tier {
 						if j.Iden != x {
 
-							(s.cache)[i].Placed = v.Placed
+							(s.shipsList[shipName].containers)[i].Cor = v.Cor
 							rv = string(fmt.Sprintf("%v is switched with %v at %v", v.Name, j.Name, time.Now().Format(time.ANSIC)))
 						}
 					}
 				}
 			}
 
-			(s.cache)[k].Placed = int32(place)
+			(s.shipsList[shipName].containers)[k].Cor = place
 			if len(rv) < 1 {
 				rv = string(fmt.Sprintf("%v is moved to %d at %v", v.Name, place, time.Now().Format(time.ANSIC)))
 			}
@@ -344,7 +445,7 @@ func (s *SerConn) Swap(x string, place int) {
 		}
 	}
 	fmt.Println(rv, place)
-	s.log = append(s.log, rv)
+	s.log[shipName] = append(s.log[shipName], rv)
 
 }
 
@@ -370,15 +471,51 @@ func (s *SerConn) RunServer() error {
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	server := SerConn{
-		port:    8080,
-		context: ctx,
-		cancel:  cancel,
-		cache: []Container{
+	ships:=ShipContainer{
+		bays: 10,
+		rows: 10,
+		tiers: 6,
+		invalids: []Cordinates{
+			{
+				bay: 0,
+				row: 0,
+				tier: 5,
+			},
+			{
+				bay: 0,
+				row: 9,
+				tier: 5,
+			},
+			{
+				bay: 1,
+				row: 5,
+				tier: 5,
+			},
+			{
+				bay: 1,
+				row: 4,
+				tier: 5,
+			},
+			{
+				bay: 2,
+				row: 3,
+				tier: 5,
+			},
+			{
+				bay: 2,
+				row: 6,
+				tier: 5,
+			},
+		},
+		containers: []Container{
 			{
 				Name:   "1",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
 				Iden:   "1",
 				Key:    0,
 				inTime: time.Now(),
@@ -391,7 +528,12 @@ func main() {
 			},
 			{
 				Name:   "2",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
 				Iden:   "2",
 				Key:    1,
 				inTime: time.Now(),
@@ -404,7 +546,12 @@ func main() {
 			},
 			{
 				Name:   "3",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
 				Iden:   "3",
 				Key:    2,
 				inTime: time.Now(),
@@ -417,7 +564,12 @@ func main() {
 			},
 			{
 				Name:   "4",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
 				Iden:   "4",
 				Key:    3,
 				inTime: time.Now(),
@@ -430,7 +582,12 @@ func main() {
 			},
 			{
 				Name:   "5",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
 				Iden:   "5",
 				Key:    4,
 				inTime: time.Now(),
@@ -443,7 +600,12 @@ func main() {
 			},
 			{
 				Name:   "6",
-				Placed: -1,
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
 				Iden:   "6",
 				Key:    5,
 				inTime: time.Now(),
@@ -456,7 +618,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 6,
+				Cor: Cordinates{
+					bay: 0,
+					row: 0,
+					tier: 0,
+				},
+				Type: 0,
 				Iden:   "7",
 				Key:    6,
 				inTime: time.Now(),
@@ -469,7 +636,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 7,
+				Cor: Cordinates{
+					bay: 0,
+					row: 1,
+					tier: 0,
+				},
+				Type: 0,
 				Iden:   "8",
 				Key:    7,
 				inTime: time.Now(),
@@ -482,7 +654,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 8,
+				Cor: Cordinates{
+					bay: 0,
+					row: 2,
+					tier: 0,
+				},
+				Type: 0,
 				Iden:   "9",
 				Key:    8,
 				inTime: time.Now(),
@@ -495,7 +672,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 9,
+				Cor: Cordinates{
+					bay: 1,
+					row: 0,
+					tier: 0,
+				},
+				Type: 1,
 				Iden:   "10",
 				Key:    9,
 				inTime: time.Now(),
@@ -508,7 +690,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 10,
+				Cor: Cordinates{
+					bay: 1,
+					row: 0,
+					tier: 1,
+				},
+				Type: 1,
 				Iden:   "11",
 				Key:    10,
 				inTime: time.Now(),
@@ -521,7 +708,12 @@ func main() {
 			},
 			{
 				Name:   "x",
-				Placed: 11,
+				Cor: Cordinates{
+					bay: 1,
+					row: 1,
+					tier: 0,
+				},
+				Type: 1,
 				Iden:   "12",
 				Key:    11,
 				inTime: time.Now(),
@@ -533,11 +725,276 @@ func main() {
 				},
 			},
 		},
+	}
+	ships_2:=ShipContainer{
+		bays: 10,
+		rows: 10,
+		tiers: 6,
+		invalids: []Cordinates{
+			{
+				bay: 0,
+				row: 0,
+				tier: 5,
+			},
+			{
+				bay: 0,
+				row: 9,
+				tier: 5,
+			},
+			{
+				bay: 1,
+				row: 5,
+				tier: 5,
+			},
+			{
+				bay: 1,
+				row: 4,
+				tier: 5,
+			},
+			{
+				bay: 2,
+				row: 3,
+				tier: 5,
+			},
+			{
+				bay: 2,
+				row: 6,
+				tier: 5,
+			},
+		},
+		containers: []Container{
+			{
+				Name:   "1",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
+				Iden:   "1",
+				Key:    0,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner A",
+					From:   "USA",
+					atTime: "12/5/2022",
+					owner:  "Chevorale",
+				},
+			},
+			{
+				Name:   "2",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
+				Iden:   "2",
+				Key:    1,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner B",
+					From:   "BR",
+					atTime: "12/5/2022",
+					owner:  "Rio Cargo",
+				},
+			},
+			{
+				Name:   "3",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
+				Iden:   "3",
+				Key:    2,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner C",
+					From:   "CEZ",
+					atTime: "12/5/2022",
+					owner:  "Winston Housing",
+				},
+			},
+			{
+				Name:   "4",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
+				Iden:   "4",
+				Key:    3,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner D",
+					From:   "JP",
+					atTime: "12/5/2022",
+					owner:  "Mitsubishi Elc",
+				},
+			},
+			{
+				Name:   "5",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 0,
+				Iden:   "5",
+				Key:    4,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner E",
+					From:   "SA",
+					atTime: "12/5/2022",
+					owner:  "SA trade assoc",
+				},
+			},
+			{
+				Name:   "6",
+				Cor: Cordinates{
+					bay: -1,
+					row: -1,
+					tier: -1,
+				},
+				Type: 1,
+				Iden:   "6",
+				Key:    5,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Planner F",
+					From:   "CN",
+					atTime: "12/5/2022",
+					owner:  "North Start inc",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 0,
+					row: 0,
+					tier: 0,
+				},
+				Type: 0,
+				Iden:   "7",
+				Key:    6,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 0,
+					row: 1,
+					tier: 0,
+				},
+				Type: 0,
+				Iden:   "8",
+				Key:    7,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 0,
+					row: 2,
+					tier: 0,
+				},
+				Type: 0,
+				Iden:   "9",
+				Key:    8,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 1,
+					row: 0,
+					tier: 0,
+				},
+				Type: 1,
+				Iden:   "10",
+				Key:    9,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 1,
+					row: 0,
+					tier: 1,
+				},
+				Type: 1,
+				Iden:   "11",
+				Key:    10,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+			{
+				Name:   "x",
+				Cor: Cordinates{
+					bay: 1,
+					row: 1,
+					tier: 0,
+				},
+				Type: 1,
+				Iden:   "12",
+				Key:    11,
+				inTime: time.Now(),
+				Detail: detail{
+					by:     "Ship",
+					From:   "Ship",
+					atTime: "12/5/2022",
+					owner:  "Ship owner",
+				},
+			},
+		},
+	}
+	server := SerConn{
+		port:    8080,
+		context: ctx,
+		cancel:  cancel,
+		shipsList: make(map[string]ShipContainer),
 		toSend:    make(map[string]chan *pb.Pack),
 		clients:   make(map[string]RelayConn),
-		log:       make([]string, 0),
+		log:       make(map[string][]string),
 		detailLog: make([]string, 0),
 	}
+	server.shipsList["Ship_1"]=ships
+	server.shipsList["Ship_2"]=ships_2
+	server.log["Ship_1"]=make([]string, 0)
+	server.log["Ship_2"]=make([]string, 0)
 	shipServer := ShipConn{
 		port:      8050,
 		context:   ctx,
@@ -662,7 +1119,7 @@ func main() {
 			{
 				No:           3,
 				Name:         "doc_3",
-				Length:       200,
+				Length:       150,
 				BoarderRight: 4,
 				ShipList:     make([]string, 0),
 			},
@@ -677,6 +1134,20 @@ func main() {
 				No:           5,
 				Name:         "doc_5",
 				Length:       200,
+				BoarderRight: -1,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           6,
+				Name:         "doc_6",
+				Length:       300,
+				BoarderRight: -1,
+				ShipList:     make([]string, 0),
+			},
+			{
+				No:           7,
+				Name:         "doc_7",
+				Length:       250,
 				BoarderRight: -1,
 				ShipList:     make([]string, 0),
 			},

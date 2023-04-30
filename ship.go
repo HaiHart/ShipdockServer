@@ -79,7 +79,7 @@ func (s *ShipConn) FetchDocks(ctx context.Context, time *pb.Header) (*pb.Docks, 
 			},
 			InTime:  timestamppb.New(v.InTime),
 			OutTime: timestamppb.New(v.OutTime),
-			Length: v.Length,
+			Length:  v.Length,
 		})
 	}
 	for _, v := range s.log {
@@ -188,30 +188,30 @@ func (s *ShipConn) setShip(doc int, name string, idx int) {
 		s.docks[doc].ShipList = temp
 		return
 	}
-	if s.docks[doc].ShipList[idx] == "" {
-		s.docks[doc].ShipList[idx] = name
-		return
-	}
+	// if s.docks[doc].ShipList[idx] == "" {
+	// 	s.docks[doc].ShipList[idx] = name
+	// 	return
+	// }
 	s.docks[doc].ShipList = append(s.docks[doc].ShipList[:idx+1], s.docks[doc].ShipList[idx:]...)
 	s.docks[doc].ShipList[idx] = name
-	i := s.docks[doc].BoarderRight
-	for i != -1 {
-		for rv, j := range s.docks[i].ShipList {
-			checkpoint := false
-			for _, k := range s.docks[doc].ShipList[idx+1:] {
-				if j == k {
-					s.setShip(int(i), j, rv+1)
-					checkpoint = true
-					break
-				}
-			}
-			if checkpoint {
+	// i := s.docks[doc].BoarderRight
+	// for i != -1 {
+	// 	for rv, j := range s.docks[i].ShipList {
+	// 		checkpoint := false
+	// 		for _, k := range s.docks[doc].ShipList[idx+1:] {
+	// 			if j == k {
+	// 				s.setShip(int(i), j, rv+1)
+	// 				checkpoint = true
+	// 				break
+	// 			}
+	// 		}
+	// 		if checkpoint {
 
-				break
-			}
-		}
-		i = s.docks[i].BoarderRight
-	}
+	// 			break
+	// 		}
+	// 	}
+	// 	i = s.docks[i].BoarderRight
+	// }
 
 }
 
@@ -232,6 +232,11 @@ func (s *ShipConn) placeShip(DocPlace int, Name string) bool {
 	}
 	listDoc := s.checkFit(doc, ship)
 	idxes := make([]int, 0)
+	if len(listDoc) == 0 {
+		s.placeShip(int(temp), Name)
+		fmt.Println("End no place")
+		return false
+	}
 	for _, i := range listDoc {
 		j := s.checkTime(i, ship)
 		idxes = append(idxes, j)
@@ -253,7 +258,7 @@ func (s *ShipConn) placeShip(DocPlace int, Name string) bool {
 		fmt.Println("empty")
 		return false
 	}
-	rv = fmt.Sprintf("Ship %s has been set to dock(s): %v ; at position %v ; at time %v", Name,listDoc, idxes, time.Now())
+	rv = fmt.Sprintf("Ship %s has been set to dock(s): %v ; at position %v ; at time %v", Name, listDoc, idxes, time.Now())
 	s.log = append(s.log, rv)
 	fmt.Println(rv)
 	return true
