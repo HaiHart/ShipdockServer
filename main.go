@@ -336,46 +336,46 @@ func (s *SerConn) CheckOnCacheMove(changes *Container, new_place Cordinates, shi
 	defer s.lock.Unlock()
 
 	if new_place.bay > s.shipsList[shipName].bays || new_place.row > s.shipsList[shipName].rows || new_place.tier > s.shipsList[shipName].tiers {
-		fmt.Println("failed _1")
+		// fmt.Println("failed _1")
 		return false
 	}
 
 	if changes.Cor.bay == new_place.bay && changes.Cor.row == new_place.row && changes.Cor.tier == new_place.tier {
-		fmt.Println("failed_2")
+		// fmt.Println("failed_2")
 		return false
 	}
 
 	if changes.Type == 0 && new_place.bay%2 == 1 && new_place.bay != -1 {
-		fmt.Println("failed_3")
+		// fmt.Println("failed_3")
 		return false
 	}
 
 	if changes.Type == 1 && new_place.bay%2 == 0 && new_place.bay != -1 {
-		fmt.Println("failed_4")
+		// fmt.Println("failed_4")
 		return false
 	}
 
 	if changes.Name == "x" && new_place.bay == -1 {
-		fmt.Println("failed_5")
+		// fmt.Println("failed_5")
 		return false
 	}
 	for _, v := range s.shipsList[shipName].containers {
 		if v.Cor.bay == new_place.bay && v.Cor.row == new_place.row && v.Cor.tier == new_place.tier && new_place.bay != -1 && new_place.row != -1 && new_place.tier != -1 {
-			fmt.Println("failed_6 ", v.Cor, " ", new_place)
+			// fmt.Println("failed_6 ", v.Cor, " ", new_place)
 			return false
 		}
 	}
 	for _, v := range s.shipsList[shipName].containers {
 		if v.Iden == changes.Iden {
 			if v.Cor.bay != changes.Cor.bay || v.Cor.row != changes.Cor.row || v.Cor.tier != changes.Cor.tier {
-				fmt.Println("failed_7 ", v.Cor, " ", changes.Cor)
+				// fmt.Println("failed_7 ", v.Cor, " ", changes.Cor)
 				return false
 			}
 		}
 	}
 	for _, v := range s.shipsList[shipName].invalids {
 		if v.bay == changes.Cor.bay && v.row == changes.Cor.row && v.tier == changes.Cor.tier {
-			fmt.Println("failed_8")
+			// fmt.Println("failed_8")
 			return false
 		}
 	}
@@ -401,7 +401,7 @@ func (s *SerConn) CheckOnCacheSwap(changes *Container, changes_2 *Container, shi
 		return false
 	}
 
-	if changes.Cor.bay != changes_2.Cor.bay || (changes.Cor.row == changes_2.Cor.row && changes.Cor.tier == changes_2.Cor.tier) {
+	if changes.Cor.row == changes_2.Cor.row && changes.Cor.tier == changes_2.Cor.tier {
 		return false
 	}
 	for _, v := range s.shipsList[shipName].containers {
