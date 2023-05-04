@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -430,6 +431,35 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 	return nil, nil
 }
 
+func (s *SerConn) generatePackage(shipName string) {
+	tmp := s.shipsList[shipName]
+	for i:=0;i<3;i++{
+		for j:=0;j<tmp.tiers/3;j++{
+			for k:=0;k<tmp.rows;k++{
+				tmp.containers = append(tmp.containers, Container{
+					Name: "x",
+					Cor: Cordinates{
+						bay:  i,
+						row:  k,
+						tier: j,
+					},
+					Type:   i%2,
+					Iden:   strconv.Itoa(7+i*k*j+k*j+k),
+					Key:    int32(6+i*k*j+k*j+k),
+					inTime: time.Now(),
+					Detail: detail{
+						by:     "Ship",
+						From:   "Ship",
+						atTime: "12/5/2022",
+						owner:  "Ship owner",
+					},
+				})
+			}
+		}
+	}
+	s.shipsList[shipName] = tmp
+}
+
 func (s *SerConn) Swap(x string, place Cordinates, shipName string) {
 
 	var rv string = ""
@@ -629,114 +659,114 @@ func main() {
 					owner:  "North Start inc",
 				},
 			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  0,
-					row:  0,
-					tier: 0,
-				},
-				Type:   0,
-				Iden:   "7",
-				Key:    6,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  0,
-					row:  1,
-					tier: 0,
-				},
-				Type:   0,
-				Iden:   "8",
-				Key:    7,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  0,
-					row:  2,
-					tier: 0,
-				},
-				Type:   0,
-				Iden:   "9",
-				Key:    8,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  1,
-					row:  0,
-					tier: 0,
-				},
-				Type:   1,
-				Iden:   "10",
-				Key:    9,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  1,
-					row:  0,
-					tier: 1,
-				},
-				Type:   1,
-				Iden:   "11",
-				Key:    10,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
-			{
-				Name: "x",
-				Cor: Cordinates{
-					bay:  1,
-					row:  1,
-					tier: 0,
-				},
-				Type:   1,
-				Iden:   "12",
-				Key:    11,
-				inTime: time.Now(),
-				Detail: detail{
-					by:     "Ship",
-					From:   "Ship",
-					atTime: "12/5/2022",
-					owner:  "Ship owner",
-				},
-			},
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  0,
+			// 		row:  0,
+			// 		tier: 0,
+			// 	},
+			// 	Type:   0,
+			// 	Iden:   "7",
+			// 	Key:    6,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  0,
+			// 		row:  1,
+			// 		tier: 0,
+			// 	},
+			// 	Type:   0,
+			// 	Iden:   "8",
+			// 	Key:    7,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  0,
+			// 		row:  2,
+			// 		tier: 0,
+			// 	},
+			// 	Type:   0,
+			// 	Iden:   "9",
+			// 	Key:    8,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  1,
+			// 		row:  0,
+			// 		tier: 0,
+			// 	},
+			// 	Type:   1,
+			// 	Iden:   "10",
+			// 	Key:    9,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  1,
+			// 		row:  0,
+			// 		tier: 1,
+			// 	},
+			// 	Type:   1,
+			// 	Iden:   "11",
+			// 	Key:    10,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
+			// {
+			// 	Name: "x",
+			// 	Cor: Cordinates{
+			// 		bay:  1,
+			// 		row:  1,
+			// 		tier: 0,
+			// 	},
+			// 	Type:   1,
+			// 	Iden:   "12",
+			// 	Key:    11,
+			// 	inTime: time.Now(),
+			// 	Detail: detail{
+			// 		by:     "Ship",
+			// 		From:   "Ship",
+			// 		atTime: "12/5/2022",
+			// 		owner:  "Ship owner",
+			// 	},
+			// },
 		},
 	}
 	ships_2 := ShipContainer{
@@ -1008,6 +1038,7 @@ func main() {
 	server.shipsList["Ship_2"] = ships_2
 	server.log["Ship_1"] = make([]string, 0)
 	server.log["Ship_2"] = make([]string, 0)
+	server.generatePackage("Ship_1")
 	shipServer := ShipConn{
 		port:      8050,
 		context:   ctx,
