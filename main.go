@@ -444,7 +444,7 @@ func (s *SerConn) generatePackage(shipName string) {
 						tier: j,
 					},
 					Type:   i%2,
-					Iden:   strconv.Itoa(7+i*tmp.rows*tmp.tiers/3+k*tmp.rows+k),
+					Iden:   strconv.Itoa(7+i*tmp.rows*tmp.tiers/3+j*tmp.rows+k),
 					Key:    int32(6+i*tmp.rows*tmp.tiers/3+k*tmp.rows+k),
 					inTime: time.Now(),
 					Detail: detail{
