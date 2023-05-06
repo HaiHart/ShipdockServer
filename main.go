@@ -248,7 +248,7 @@ func (s *SerConn) ValidMove(changes *Container, new_place Cordinates, peerID str
 		for _, i := range s.toSend {
 			i <- new_move
 		}
-		fmt.Println("not failed")
+		// fmt.Println("not failed")
 
 	} else {
 		new_move.Err = "Miss match occur"
@@ -337,46 +337,46 @@ func (s *SerConn) CheckOnCacheMove(changes *Container, new_place Cordinates, shi
 	defer s.lock.Unlock()
 
 	if new_place.bay > s.shipsList[shipName].bays || new_place.row > s.shipsList[shipName].rows || new_place.tier > s.shipsList[shipName].tiers {
-		// fmt.Println("failed _1")
+		fmt.Println("failed _1")
 		return false
 	}
 
 	if changes.Cor.bay == new_place.bay && changes.Cor.row == new_place.row && changes.Cor.tier == new_place.tier {
-		// fmt.Println("failed_2")
+		fmt.Println("failed_2")
 		return false
 	}
 
 	if changes.Type == 0 && new_place.bay%2 == 1 && new_place.bay != -1 {
-		// fmt.Println("failed_3")
+		fmt.Println("failed_3")
 		return false
 	}
 
 	if changes.Type == 1 && new_place.bay%2 == 0 && new_place.bay != -1 {
-		// fmt.Println("failed_4")
+		fmt.Println("failed_4")
 		return false
 	}
 
 	if changes.Name == "x" && new_place.bay == -1 {
-		// fmt.Println("failed_5")
+		fmt.Println("failed_5")
 		return false
 	}
 	for _, v := range s.shipsList[shipName].containers {
 		if v.Cor.bay == new_place.bay && v.Cor.row == new_place.row && v.Cor.tier == new_place.tier && new_place.bay != -1 && new_place.row != -1 && new_place.tier != -1 {
-			// fmt.Println("failed_6 ", v.Cor, " ", new_place)
+			fmt.Println("failed_6 ", v.Cor, " ", new_place)
 			return false
 		}
 	}
 	for _, v := range s.shipsList[shipName].containers {
 		if v.Iden == changes.Iden {
 			if v.Cor.bay != changes.Cor.bay || v.Cor.row != changes.Cor.row || v.Cor.tier != changes.Cor.tier {
-				// fmt.Println("failed_7 ", v.Cor, " ", changes.Cor)
+				fmt.Println("failed_7 ", v.Cor, " ", changes.Cor)
 				return false
 			}
 		}
 	}
 	for _, v := range s.shipsList[shipName].invalids {
 		if v.bay == changes.Cor.bay && v.row == changes.Cor.row && v.tier == changes.Cor.tier {
-			// fmt.Println("failed_8")
+			fmt.Println("failed_8")
 			return false
 		}
 	}
@@ -444,8 +444,8 @@ func (s *SerConn) generatePackage(shipName string) {
 						tier: j,
 					},
 					Type:   i%2,
-					Iden:   strconv.Itoa(7+i*k*j+k*j+k),
-					Key:    int32(6+i*k*j+k*j+k),
+					Iden:   strconv.Itoa(7+i*tmp.rows*tmp.tiers/3+k*tmp.rows+k),
+					Key:    int32(6+i*tmp.rows*tmp.tiers/3+k*tmp.rows+k),
 					inTime: time.Now(),
 					Detail: detail{
 						by:     "Ship",
