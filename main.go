@@ -59,6 +59,7 @@ type SerConn struct {
 	shipsList   map[string]ShipContainer
 	clients     map[string]RelayConn
 	toSend      map[string]chan *pb.Pack
+	nameToShip  map[string]string
 	lock        sync.Mutex
 	currCommand []Container
 	port        int32
@@ -74,6 +75,14 @@ func (s *SerConn) FetchList(ctx context.Context, time *pb.Header) (*pb.ShipList,
 	var log []string = make([]string, 0)
 
 	var inval []*pb.Cordinate
+
+	if _, ok := s.nameToShip[time.Name]; !ok {
+		s.nameToShip[time.Name] = time.ShipId
+	}
+
+	if s.nameToShip[time.Name] != time.Name {
+		s.nameToShip[time.Name] = time.Name
+	}
 
 	// peerID := time.Name
 
@@ -133,19 +142,35 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 		s.toSend[peerID] = make(chan *pb.Pack, 1000)
 	}
 
+	end:= false
+
 	go func() {
 		for {
 			select {
 			case toSend := <-s.toSend[peerID]:
-				if err := msg.Send(toSend); err != nil {
-					fmt.Println(err)
+
+				if toSend.ShipName != s.nameToShip[peerID] {
 					continue
 				}
+
+
+				if err := msg.Send(toSend); err != nil {
+					fmt.Println(err)
+				}
+				fmt.Println("sent to ",peerID)
+			case <-ctx.Done():
+				delete(s.nameToShip, peerID)
+				delete(s.toSend, peerID)
+				end =true
+				return 
 			}
 		}
 
 	}()
 	for {
+		if(end){
+			break
+		}
 		in, err := msg.Recv()
 		if err == io.EOF {
 			return nil
@@ -154,6 +179,8 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 			return err
 		}
 		fmt.Printf("got command at %v\n", time.Now().UTC())
+		
+
 		var changes = Container{
 			Name: in.List[0].Name,
 			Cor: Cordinates{
@@ -236,8 +263,9 @@ func (s *SerConn) ValidMove(changes *Container, new_place Cordinates, peerID str
 				},
 			},
 		},
-		Swap: false,
-		Err:  "None",
+		Swap:     false,
+		Err:      "None",
+		ShipName: shipName,
 	}
 
 	if s.CheckOnCacheMove(changes, new_place, shipName) {
@@ -245,8 +273,9 @@ func (s *SerConn) ValidMove(changes *Container, new_place Cordinates, peerID str
 		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID, len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
 		s.Swap(changes.Iden, new_place, shipName)
-		for _, i := range s.toSend {
+		for name, i := range s.toSend {
 			i <- new_move
+			fmt.Println(name)
 		}
 		// fmt.Println("not failed")
 
@@ -309,8 +338,9 @@ func (s *SerConn) ValidSwap(changes *Container, changes_2 *Container, peerOD str
 				},
 			},
 		},
-		Swap: true,
-		Err:  "None",
+		Swap:     true,
+		Err:      "None",
+		ShipName: shipName,
 	}
 	if s.CheckOnCacheSwap(changes, changes_2, shipName) {
 		s.currCommand = append([]Container{*changes, *changes_2}, s.currCommand...)
@@ -433,9 +463,9 @@ func (s *SerConn) FetchShip(ctx context.Context, msg *pb.ShipAccess) (*pb.ShipRe
 
 func (s *SerConn) generatePackage(shipName string) {
 	tmp := s.shipsList[shipName]
-	for i:=0;i<3;i++{
-		for j:=0;j<tmp.tiers/3;j++{
-			for k:=0;k<tmp.rows;k++{
+	for i := 0; i < 3; i++ {
+		for j := 0; j < tmp.tiers/3; j++ {
+			for k := 0; k < tmp.rows; k++ {
 				tmp.containers = append(tmp.containers, Container{
 					Name: "x",
 					Cor: Cordinates{
@@ -443,9 +473,9 @@ func (s *SerConn) generatePackage(shipName string) {
 						row:  k,
 						tier: j,
 					},
-					Type:   i%2,
-					Iden:   strconv.Itoa(7+i*tmp.rows*tmp.tiers/3+j*tmp.rows+k),
-					Key:    int32(6+i*tmp.rows*tmp.tiers/3+k*tmp.rows+k),
+					Type:   i % 2,
+					Iden:   strconv.Itoa(7 + i*tmp.rows*tmp.tiers/3 + j*tmp.rows + k),
+					Key:    int32(6 + i*tmp.rows*tmp.tiers/3 + k*tmp.rows + k),
 					inTime: time.Now(),
 					Detail: detail{
 						by:     "Ship",
@@ -659,114 +689,6 @@ func main() {
 					owner:  "North Start inc",
 				},
 			},
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  0,
-			// 		row:  0,
-			// 		tier: 0,
-			// 	},
-			// 	Type:   0,
-			// 	Iden:   "7",
-			// 	Key:    6,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  0,
-			// 		row:  1,
-			// 		tier: 0,
-			// 	},
-			// 	Type:   0,
-			// 	Iden:   "8",
-			// 	Key:    7,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  0,
-			// 		row:  2,
-			// 		tier: 0,
-			// 	},
-			// 	Type:   0,
-			// 	Iden:   "9",
-			// 	Key:    8,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  1,
-			// 		row:  0,
-			// 		tier: 0,
-			// 	},
-			// 	Type:   1,
-			// 	Iden:   "10",
-			// 	Key:    9,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  1,
-			// 		row:  0,
-			// 		tier: 1,
-			// 	},
-			// 	Type:   1,
-			// 	Iden:   "11",
-			// 	Key:    10,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
-			// {
-			// 	Name: "x",
-			// 	Cor: Cordinates{
-			// 		bay:  1,
-			// 		row:  1,
-			// 		tier: 0,
-			// 	},
-			// 	Type:   1,
-			// 	Iden:   "12",
-			// 	Key:    11,
-			// 	inTime: time.Now(),
-			// 	Detail: detail{
-			// 		by:     "Ship",
-			// 		From:   "Ship",
-			// 		atTime: "12/5/2022",
-			// 		owner:  "Ship owner",
-			// 	},
-			// },
 		},
 	}
 	ships_2 := ShipContainer{
@@ -1025,14 +947,15 @@ func main() {
 		},
 	}
 	server := SerConn{
-		port:      8080,
-		context:   ctx,
-		cancel:    cancel,
-		shipsList: make(map[string]ShipContainer),
-		toSend:    make(map[string]chan *pb.Pack),
-		clients:   make(map[string]RelayConn),
-		log:       make(map[string][]string),
-		detailLog: make([]string, 0),
+		port:       8080,
+		context:    ctx,
+		cancel:     cancel,
+		shipsList:  make(map[string]ShipContainer),
+		toSend:     make(map[string]chan *pb.Pack,100),
+		clients:    make(map[string]RelayConn),
+		log:        make(map[string][]string),
+		detailLog:  make([]string, 0),
+		nameToShip: make(map[string]string),
 	}
 	server.shipsList["Ship_1"] = ships
 	server.shipsList["Ship_2"] = ships_2

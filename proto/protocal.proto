@@ -54,6 +54,7 @@ message Pack{
     repeated Container list=1;
     string err =2;
     bool swap = 3;
+    string name=5;
 }
 
 message ShipAccess{
