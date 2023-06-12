@@ -149,15 +149,15 @@ func (s *SerConn) MoveContainer(msg pb.Com_MoveContainerServer) error {
 			select {
 			case toSend := <-s.toSend[peerID]:
 
-				if toSend.ShipName != s.nameToShip[peerID] {
-					continue
-				}
+				// if toSend.ShipName != s.nameToShip[] {
+				// 	continue
+				// }
 
 
 				if err := msg.Send(toSend); err != nil {
 					fmt.Println(err)
 				}
-				fmt.Println("sent to ",peerID)
+				// fmt.Println("sent to ",peerID)
 			case <-ctx.Done():
 				delete(s.nameToShip, peerID)
 				delete(s.toSend, peerID)
@@ -273,9 +273,9 @@ func (s *SerConn) ValidMove(changes *Container, new_place Cordinates, peerID str
 		var detail = fmt.Sprintf("%v:%v:%v is moved to %v ay %v", peerID, len(s.log), changes.Iden, new_place, time.Now().Format(time.ANSIC))
 		s.detailLog = append(s.detailLog, detail)
 		s.Swap(changes.Iden, new_place, shipName)
-		for name, i := range s.toSend {
+		for _, i := range s.toSend {
 			i <- new_move
-			fmt.Println(name)
+			// fmt.Println(name)
 		}
 		// fmt.Println("not failed")
 
